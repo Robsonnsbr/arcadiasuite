@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y \
 COPY package*.json ./
 RUN npm install
 RUN npm install -g npm@latest
-RUN npm install -g tsx             # <- garante que tsx esteja disponível
+RUN npm install -g tsx
+RUN npm install -g esbuild
 
 # 5. Copiar requirements Python e instalar
 COPY python-service/requirements.txt ./python-requirements.txt
