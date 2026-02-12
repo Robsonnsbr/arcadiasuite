@@ -7,7 +7,7 @@ WORKDIR /app
 # 3. Instalar Python e Java
 RUN apt-get update && apt-get install -y \
     python3.11 python3.11-venv python3-pip \
-    openjdk-11-jdk \
+    openjdk-17-jdk \
     git build-essential \
     && rm -rf /var/lib/apt/lists/*
 
