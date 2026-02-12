@@ -384,6 +384,26 @@ class PipelineOrchestrator extends EventEmitter {
       }
     }
 
+    const schemaFiles = applied.filter(f => f.startsWith("shared/schemas/") && f.endsWith(".ts"));
+    if (schemaFiles.length > 0) {
+      try {
+        const { registerAndMigrate } = await import("../modules/migrator");
+        for (const schemaFile of schemaFiles) {
+          const moduleName = schemaFile.replace("shared/schemas/", "").replace(".ts", "");
+          if (moduleName && moduleName !== "index" && moduleName !== "loader" && !moduleName.startsWith("_")) {
+            const migResult = await registerAndMigrate(moduleName);
+            if (migResult.success) {
+              console.log(`[Pipeline] Módulo ${moduleName}: schema registrado${migResult.migrationApplied ? " + migração aplicada" : ""}`);
+            } else {
+              errors.push(`Migração ${moduleName}: ${migResult.error}`);
+            }
+          }
+        }
+      } catch (migError: any) {
+        console.error("[Pipeline] Erro no migrator:", migError.message);
+      }
+    }
+
     if (applied.length > 0) {
       await toolManager.execute("git_local_commit", {
         message: `[Pipeline #${pipelineId}] ${pipeline.prompt.slice(0, 60)}`,

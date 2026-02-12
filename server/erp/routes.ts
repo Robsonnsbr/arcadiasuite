@@ -1,9 +1,20 @@
 import type { Express, Request, Response } from "express";
 import { erpStorage, createErpClient } from "./index";
 import { db } from "../../db/index";
-import { customers, suppliers, products, salesOrders, purchaseOrders, erpSegments, erpConfig, insertErpSegmentSchema, insertErpConfigSchema, persons, personRoles, mobileDevices, posSales, posSaleItems, finAccountsReceivable } from "@shared/schema";
+import { customers, suppliers, products, salesOrders, purchaseOrders, erpSegments, erpConfig, insertErpSegmentSchema, insertErpConfigSchema, persons, personRoles, mobileDevices, posSales, posSaleItems, finAccountsReceivable, tenants, tenantEmpresas, type TenantFeatures } from "@shared/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod";
+
+export function registerSoeRoutes(app: Express): void {
+  app.use((req, res, next) => {
+    if (req.url.startsWith("/api/soe/") || req.url === "/api/soe") {
+      req.url = req.url.replace("/api/soe", "/api/erp");
+    }
+    next();
+  });
+
+  registerErpRoutes(app);
+}
 
 export function registerErpRoutes(app: Express): void {
   app.get("/api/erp/connections", async (req: Request, res: Response) => {
@@ -1133,6 +1144,200 @@ export function registerErpRoutes(app: Express): void {
     } catch (error) {
       console.error("Error saving config:", error);
       res.status(500).json({ error: "Failed to save config" });
+    }
+  });
+
+  // GET /api/erp/tenant/modules - Get current tenant's active modules
+  app.get("/api/erp/tenant/modules", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
+      const tenantId = req.user?.tenantId || 1;
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+      if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+      
+      const defaultFeatures: TenantFeatures = {
+        ide: true, ideMode: 'pro-code', whatsapp: false, whatsappSessions: 0,
+        crm: true, erp: true, bi: false, manus: true, manusTools: [],
+        centralApis: false, centralApisManage: false, comunidades: false,
+        maxChannels: 5, biblioteca: false, bibliotecaPublish: false,
+        suporteN3: false, retail: false, plus: false, fisco: false,
+        cockpit: false, compass: true, production: false, support: false, xosCrm: false
+      };
+      
+      res.json({
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        plan: tenant.plan,
+        features: tenant.features || defaultFeatures
+      });
+    } catch (error) {
+      console.error("Error fetching tenant modules:", error);
+      res.status(500).json({ error: "Failed to fetch modules" });
+    }
+  });
+
+  // PUT /api/erp/tenant/modules - Update current tenant's modules
+  app.put("/api/erp/tenant/modules", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
+      const user = req.user;
+      if (user?.role !== 'admin' && (user as any)?.tenantRole !== 'owner') {
+        return res.status(403).json({ error: "Only admins can manage modules" });
+      }
+      const tenantId = user?.tenantId || 1;
+      
+      const features = req.body.features;
+      if (!features || typeof features !== 'object') {
+        return res.status(400).json({ error: "Invalid features object" });
+      }
+      
+      const [updated] = await db.update(tenants)
+        .set({ features, updatedAt: new Date() })
+        .where(eq(tenants.id, tenantId))
+        .returning();
+      
+      res.json({ tenantId: updated.id, features: updated.features });
+    } catch (error) {
+      console.error("Error updating tenant modules:", error);
+      res.status(500).json({ error: "Failed to update modules" });
+    }
+  });
+
+  // GET /api/erp/sync/status - Get sync status for all motors
+  app.get("/api/erp/sync/status", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
+      const tenantId = req.user?.tenantId || 1;
+      
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+      const features = (tenant?.features as TenantFeatures) || {};
+      
+      const status = {
+        retail: {
+          enabled: features.retail || false,
+          motor: features.plus ? 'plus' : features.erp ? 'erpnext' : 'none',
+          lastSync: null,
+          status: 'idle'
+        },
+        plus: {
+          enabled: features.plus || false,
+          status: 'idle'  
+        },
+        fisco: {
+          enabled: features.fisco || false,
+          status: 'idle'
+        },
+        bi: {
+          enabled: features.bi || false,
+          status: 'idle'
+        }
+      };
+      
+      res.json(status);
+    } catch (error) {
+      console.error("Error fetching sync status:", error);
+      res.status(500).json({ error: "Failed to fetch sync status" });
+    }
+  });
+
+  app.get("/api/erp/empresas", async (req: Request, res: Response) => {
+    try {
+      const tenantId = (req as any).user?.tenantId;
+      if (!tenantId) return res.status(401).json({ error: "Tenant not identified" });
+      const empresas = await db.select().from(tenantEmpresas)
+        .where(and(eq(tenantEmpresas.tenantId, tenantId), eq(tenantEmpresas.status, "active")));
+      res.json(empresas);
+    } catch (error) {
+      console.error("Error fetching empresas:", error);
+      res.status(500).json({ error: "Failed to fetch empresas" });
+    }
+  });
+
+  app.get("/api/erp/empresas/:id", async (req: Request, res: Response) => {
+    try {
+      const tenantId = (req as any).user?.tenantId;
+      if (!tenantId) return res.status(401).json({ error: "Tenant not identified" });
+      const id = parseInt(req.params.id);
+      const [empresa] = await db.select().from(tenantEmpresas)
+        .where(and(eq(tenantEmpresas.id, id), eq(tenantEmpresas.tenantId, tenantId)));
+      if (!empresa) return res.status(404).json({ error: "Empresa not found" });
+      res.json(empresa);
+    } catch (error) {
+      console.error("Error fetching empresa:", error);
+      res.status(500).json({ error: "Failed to fetch empresa" });
+    }
+  });
+
+  app.post("/api/erp/empresas", async (req: Request, res: Response) => {
+    try {
+      const tenantId = (req as any).user?.tenantId;
+      if (!tenantId) return res.status(401).json({ error: "Tenant not identified" });
+      const { razaoSocial, nomeFantasia, cnpj, ie, im, email, phone, tipo, cep, logradouro, numero, complemento, bairro, cidade, uf, codigoIbge, regimeTributario } = req.body;
+      if (!razaoSocial || !cnpj) return res.status(400).json({ error: "razaoSocial and cnpj required" });
+      const [empresa] = await db.insert(tenantEmpresas).values({
+        tenantId,
+        razaoSocial,
+        nomeFantasia: nomeFantasia || null,
+        cnpj,
+        ie: ie || null,
+        im: im || null,
+        email: email || null,
+        phone: phone || null,
+        tipo: tipo || "filial",
+        cep: cep || null,
+        logradouro: logradouro || null,
+        numero: numero || null,
+        complemento: complemento || null,
+        bairro: bairro || null,
+        cidade: cidade || null,
+        uf: uf || null,
+        codigoIbge: codigoIbge || null,
+        regimeTributario: regimeTributario || null,
+      }).returning();
+      res.status(201).json(empresa);
+    } catch (error) {
+      console.error("Error creating empresa:", error);
+      res.status(500).json({ error: "Failed to create empresa" });
+    }
+  });
+
+  app.put("/api/erp/empresas/:id", async (req: Request, res: Response) => {
+    try {
+      const tenantId = (req as any).user?.tenantId;
+      if (!tenantId) return res.status(401).json({ error: "Tenant not identified" });
+      const id = parseInt(req.params.id);
+      const [existing] = await db.select().from(tenantEmpresas)
+        .where(and(eq(tenantEmpresas.id, id), eq(tenantEmpresas.tenantId, tenantId)));
+      if (!existing) return res.status(404).json({ error: "Empresa not found" });
+      const { razaoSocial, nomeFantasia, cnpj, ie, im, email, phone, tipo, status, cep, logradouro, numero, complemento, bairro, cidade, uf, codigoIbge, regimeTributario } = req.body;
+      const [updated] = await db.update(tenantEmpresas)
+        .set({
+          ...(razaoSocial !== undefined && { razaoSocial }),
+          ...(nomeFantasia !== undefined && { nomeFantasia }),
+          ...(cnpj !== undefined && { cnpj }),
+          ...(ie !== undefined && { ie }),
+          ...(im !== undefined && { im }),
+          ...(email !== undefined && { email }),
+          ...(phone !== undefined && { phone }),
+          ...(tipo !== undefined && { tipo }),
+          ...(status !== undefined && { status }),
+          ...(cep !== undefined && { cep }),
+          ...(logradouro !== undefined && { logradouro }),
+          ...(numero !== undefined && { numero }),
+          ...(complemento !== undefined && { complemento }),
+          ...(bairro !== undefined && { bairro }),
+          ...(cidade !== undefined && { cidade }),
+          ...(uf !== undefined && { uf }),
+          ...(codigoIbge !== undefined && { codigoIbge }),
+          ...(regimeTributario !== undefined && { regimeTributario }),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(tenantEmpresas.id, id), eq(tenantEmpresas.tenantId, tenantId)))
+        .returning();
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating empresa:", error);
+      res.status(500).json({ error: "Failed to update empresa" });
     }
   });
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import MultiTenantSection from "@/components/MultiTenantSection";
 import { BrowserFrame } from "@/components/Browser/BrowserFrame";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,8 @@ import {
   Zap,
   AlertCircle,
   Clock,
-  Briefcase
+  Briefcase,
+  Building2
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -882,8 +884,8 @@ export default function Crm() {
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold" data-testid="text-crm-title">Arcádia CRM</h1>
-              <p className="text-muted-foreground">Gestão de parceiros, contratos e comunicação</p>
+              <h1 className="text-3xl font-bold" data-testid="text-crm-title">Manager Partners</h1>
+              <p className="text-muted-foreground">Gestão de parceiros, tenants e contratos</p>
             </div>
             <div className="flex gap-2">
               {googleStatus?.connected ? (
@@ -946,6 +948,10 @@ export default function Crm() {
                 <TabsTrigger value="settings" data-testid="tab-settings">
                   <Settings className="w-4 h-4 mr-2" />
                   Configurações
+                </TabsTrigger>
+                <TabsTrigger value="multitenant" data-testid="tab-multitenant">
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Multi-Tenant
                 </TabsTrigger>
               </TabsList>
             </ScrollArea>
@@ -2322,7 +2328,7 @@ export default function Crm() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="erpnext">Frappe Arcádia ERP</SelectItem>
+                            <SelectItem value="erpnext">Frappe ERPNext</SelectItem>
                             <SelectItem value="crm_next">Frappe Arcádia CRM</SelectItem>
                           </SelectContent>
                         </Select>
@@ -2381,7 +2387,7 @@ export default function Crm() {
                     <CardContent className="space-y-4">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Sistema:</span>
-                        <Badge variant="outline" className="capitalize">{connector.targetSystem === "erpnext" ? "Arcádia ERP" : "Arcádia CRM"}</Badge>
+                        <Badge variant="outline" className="capitalize">{connector.targetSystem === "erpnext" ? "ERPNext" : "Arcádia CRM"}</Badge>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Status:</span>
@@ -2681,6 +2687,10 @@ export default function Crm() {
                   </Card>
                 </>
               )}
+            </TabsContent>
+
+            <TabsContent value="multitenant" className="space-y-4">
+              <MultiTenantSection />
             </TabsContent>
           </Tabs>
         </div>

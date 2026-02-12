@@ -45,7 +45,23 @@ import {
   ChevronRight,
   ImageIcon,
   Layout,
-  LayoutGrid
+  LayoutGrid,
+  Clock,
+  ArrowRight,
+  ThumbsUp,
+  ThumbsDown,
+  Cpu,
+  Shield,
+  Brain,
+  Undo2,
+  BookOpen,
+  Gauge,
+  ShieldCheck,
+  AlertTriangle,
+  CheckSquare,
+  Square,
+  Fingerprint,
+  PanelLeft
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiRequest } from "@/lib/queryClient";
@@ -78,7 +94,7 @@ const FILE_TO_ROUTE_MAP: Record<string, string> = {
   "Fisco": "/fisco",
   "People": "/people",
   "Contabil": "/contabil",
-  "ERP": "/erp",
+  "SOE": "/soe",
   "Financeiro": "/financeiro",
   "Communities": "/communities",
   "QualityModule": "/quality",
@@ -156,7 +172,7 @@ const SYSTEM_MODULES = [
     { name: "XOS Campanhas", path: "/xos/campaigns", icon: "📣", desc: "Campanhas de marketing" },
   ]},
   { category: "Negócios", modules: [
-    { name: "ERP", path: "/erp", icon: "🏢", desc: "Gestão empresarial" },
+    { name: "SOE", path: "/soe", icon: "🏢", desc: "Sistema Operacional Empresarial" },
     { name: "Financeiro", path: "/financeiro", icon: "💰", desc: "Gestão financeira" },
     { name: "Fisco", path: "/fisco", icon: "📋", desc: "Motor fiscal NF-e" },
     { name: "Contábil", path: "/contabil", icon: "📊", desc: "Contabilidade" },
@@ -752,6 +768,667 @@ function StagingPreviewTab() {
   );
 }
 
+const PHASE_LABELS: Record<string, { label: string; icon: any; color: string }> = {
+  design: { label: "Arquitetura", icon: Cpu, color: "text-blue-400" },
+  codegen: { label: "Geração de Código", icon: FileCode, color: "text-green-400" },
+  validation: { label: "Validação", icon: Shield, color: "text-yellow-400" },
+  staging: { label: "Staging", icon: Eye, color: "text-purple-400" },
+  evolution: { label: "Evolução", icon: Brain, color: "text-pink-400" },
+};
+
+const STATUS_BADGES: Record<string, { label: string; color: string }> = {
+  queued: { label: "Na Fila", color: "bg-gray-600" },
+  running: { label: "Executando", color: "bg-blue-600" },
+  staging_review: { label: "Aguardando Aprovação", color: "bg-yellow-600" },
+  completed: { label: "Concluído", color: "bg-green-600" },
+  failed: { label: "Falhou", color: "bg-red-600" },
+};
+
+function BudgetMeter({ budget }: { budget: any }) {
+  if (!budget) return null;
+  const timePercent = Math.min(100, Math.round((budget.usedTimeMs / budget.maxTimeMs) * 100));
+  const callsPercent = Math.min(100, Math.round((budget.usedCalls / budget.maxCalls) * 100));
+  return (
+    <Card className="bg-zinc-900 border-zinc-800" data-testid="budget-meter">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm text-zinc-400 flex items-center gap-2">
+          <Gauge className="w-4 h-4" /> Budget
+          {budget.exceeded && <Badge className="bg-red-600 text-[10px]">Excedido</Badge>}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div>
+          <div className="flex justify-between text-xs text-zinc-400 mb-1">
+            <span>Tempo</span>
+            <span>{Math.round(budget.usedTimeMs / 1000)}s / {Math.round(budget.maxTimeMs / 1000)}s</span>
+          </div>
+          <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${timePercent > 80 ? "bg-red-500" : timePercent > 50 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${timePercent}%` }} />
+          </div>
+        </div>
+        <div>
+          <div className="flex justify-between text-xs text-zinc-400 mb-1">
+            <span>Chamadas</span>
+            <span>{budget.usedCalls} / {budget.maxCalls}</span>
+          </div>
+          <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${callsPercent > 80 ? "bg-red-500" : callsPercent > 50 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${callsPercent}%` }} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RunbookView({ pipelineId }: { pipelineId: number }) {
+  const { data } = useQuery<any>({ queryKey: [`/api/xos/pipeline/${pipelineId}/runbook`], refetchInterval: 10000 });
+  const runbook = data?.runbook;
+  if (!runbook) return <p className="text-sm text-zinc-500 text-center py-4">Nenhum runbook disponível ainda</p>;
+  return (
+    <div className="space-y-4" data-testid="runbook-view">
+      <Card className="bg-zinc-900 border-zinc-800">
+        <CardHeader className="pb-2"><CardTitle className="text-sm text-zinc-400">Contexto</CardTitle></CardHeader>
+        <CardContent><p className="text-sm text-zinc-300">{runbook.context}</p></CardContent>
+      </Card>
+      {runbook.decisions?.length > 0 && (
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-zinc-400">Decisões ({runbook.decisions.length})</CardTitle></CardHeader>
+          <CardContent>
+            <ScrollArea className="h-48">
+              <div className="space-y-2">
+                {runbook.decisions.map((d: any, idx: number) => (
+                  <div key={idx} className="flex items-start gap-2 p-2 bg-zinc-800/50 rounded text-xs">
+                    <Badge variant="outline" className="text-[10px] shrink-0">{d.phase}</Badge>
+                    <span className="text-zinc-500">{d.agent}:</span>
+                    <span className="text-zinc-300 flex-1">{d.decision}</span>
+                    <span className="text-zinc-600 text-[10px] shrink-0">{new Date(d.timestamp).toLocaleTimeString("pt-BR")}</span>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
+      {runbook.validations && (
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-zinc-400 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4" /> Validação
+              <Badge className={runbook.validations.valid ? "bg-green-600" : "bg-red-600"}>Score: {runbook.validations.score}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {runbook.validations.gates && (
+              <div className="flex gap-2 flex-wrap">
+                {Object.entries(runbook.validations.gates).map(([gate, passed]: [string, any]) => (
+                  <Badge key={gate} className={passed ? "bg-green-600/20 text-green-400 border border-green-600/50" : "bg-red-600/20 text-red-400 border border-red-600/50"}>
+                    {passed ? <CheckCircle className="w-3 h-3 mr-1" /> : <XCircle className="w-3 h-3 mr-1" />}{gate}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      {runbook.approval && (
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-zinc-400">Aprovação</CardTitle></CardHeader>
+          <CardContent className="text-xs text-zinc-300 space-y-1">
+            <p>Revisado por: {runbook.approval.reviewedBy}</p>
+            <p>Arquivos aplicados: {runbook.approval.applied?.length || 0}</p>
+            {runbook.approval.errors?.length > 0 && <p className="text-red-400">Erros: {runbook.approval.errors.join(", ")}</p>}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function PipelineTimeline({ phases }: { phases: Record<string, any> | null }) {
+  if (!phases) return null;
+  const phaseOrder = ["design", "codegen", "validation", "staging", "evolution"];
+  return (
+    <div className="flex items-center gap-1 w-full" data-testid="pipeline-timeline">
+      {phaseOrder.map((phase, idx) => {
+        const data = phases[phase] || { status: "pending" };
+        const config = PHASE_LABELS[phase];
+        const Icon = config.icon;
+        const isActive = data.status === "running";
+        const isComplete = data.status === "completed";
+        const isFailed = data.status === "failed";
+        return (
+          <div key={phase} className="flex items-center flex-1">
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg flex-1 transition-all ${isActive ? "bg-blue-500/20 border border-blue-500/50 shadow-lg shadow-blue-500/10" : ""} ${isComplete ? "bg-green-500/10 border border-green-500/30" : ""} ${isFailed ? "bg-red-500/10 border border-red-500/30" : ""} ${data.status === "pending" ? "bg-zinc-800/50 border border-zinc-700/30" : ""}`} data-testid={`phase-${phase}`}>
+              {isActive ? <Loader2 className={`w-4 h-4 ${config.color} animate-spin`} /> : isComplete ? <CheckCircle className="w-4 h-4 text-green-400" /> : isFailed ? <XCircle className="w-4 h-4 text-red-400" /> : <Icon className="w-4 h-4 text-zinc-500" />}
+              <span className={`text-xs font-medium ${isActive ? config.color : isComplete ? "text-green-400" : "text-zinc-500"}`}>{config.label}</span>
+            </div>
+            {idx < phaseOrder.length - 1 && <ChevronRight className={`w-4 h-4 mx-1 shrink-0 ${isComplete ? "text-green-400" : "text-zinc-600"}`} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function InlinePipelineTracker({ pipelineId, onExpand }: { pipelineId: number; onExpand?: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: details, isLoading, isError } = useQuery<any>({ queryKey: [`/api/xos/pipeline/${pipelineId}`], refetchInterval: 3000 });
+  const pipeline = details?.pipeline;
+  const phases = pipeline?.phases;
+  const staging = details?.staging || [];
+  const phaseOrder = ["design", "codegen", "validation", "staging", "evolution"];
+
+  const currentPhase = phaseOrder.find(p => phases?.[p]?.status === "running") || pipeline?.currentPhase;
+  const isFinished = pipeline?.status === "completed" || pipeline?.status === "failed";
+  const hasPending = staging.some((s: any) => s.status === "pending");
+  const elapsedTime = pipeline?.budget?.usedTimeMs ? Math.round(pipeline.budget.usedTimeMs / 1000) : 0;
+
+  if (isLoading) {
+    return (
+      <div className="w-full rounded-lg border bg-white p-3 flex items-center gap-2" data-testid={`inline-pipeline-${pipelineId}`}>
+        <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
+        <span className="text-sm text-gray-500">Pipeline #{pipelineId}...</span>
+      </div>
+    );
+  }
+
+  if (isError || !pipeline) {
+    return (
+      <div className="w-full rounded-lg border border-red-200 bg-red-50 p-3 flex items-center gap-2" data-testid={`inline-pipeline-${pipelineId}`}>
+        <XCircle className="w-4 h-4 text-red-400" />
+        <span className="text-sm text-red-600">Pipeline #{pipelineId} — erro ao carregar</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full rounded-lg border bg-white overflow-hidden" data-testid={`inline-pipeline-${pipelineId}`}>
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-3 mb-2">
+          <span className="text-sm font-semibold text-gray-800">#{pipelineId}</span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+            pipeline?.status === "completed" ? "bg-green-100 text-green-700" :
+            pipeline?.status === "failed" ? "bg-red-100 text-red-700" :
+            pipeline?.status === "staging_review" ? "bg-yellow-100 text-yellow-700" :
+            "bg-blue-100 text-blue-700"
+          }`}>
+            {pipeline?.status === "running" ? "Executando" :
+             pipeline?.status === "completed" ? "Concluído" :
+             pipeline?.status === "failed" ? "Falhou" :
+             pipeline?.status === "staging_review" ? "Revisão" :
+             pipeline?.status}
+          </span>
+          {!isFinished && currentPhase && (
+            <span className="text-xs text-gray-400 flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              {PHASE_LABELS[currentPhase]?.label || currentPhase}
+            </span>
+          )}
+          <span className="text-xs text-gray-400 ml-auto">{elapsedTime}s</span>
+          <button onClick={() => setExpanded(!expanded)} className="p-1 hover:bg-gray-100 rounded" data-testid={`btn-expand-pipeline-${pipelineId}`}>
+            {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+          </button>
+        </div>
+
+        <p className="text-xs text-gray-500 line-clamp-1 mb-2">{pipeline?.prompt?.replace(/^\[MODO (?:PLANEJAMENTO|EXECUÇÃO)\].*?Solicitação:\s*/s, "")}</p>
+
+        <div className="flex items-center gap-1">
+          {phaseOrder.map((phase) => {
+            const data = phases?.[phase] || { status: "pending" };
+            const isActive = data.status === "running";
+            const isComplete = data.status === "completed";
+            const isFailed = data.status === "failed";
+            return (
+              <div key={phase} className="flex-1 flex flex-col items-center gap-1">
+                <div className={`w-full h-1.5 rounded-full ${
+                  isActive ? "bg-blue-400 animate-pulse" :
+                  isComplete ? "bg-green-400" :
+                  isFailed ? "bg-red-400" :
+                  "bg-gray-200"
+                }`} />
+                <span className={`text-[9px] leading-none ${
+                  isActive ? "text-blue-600 font-medium" :
+                  isComplete ? "text-green-600" :
+                  isFailed ? "text-red-500" :
+                  "text-gray-300"
+                }`}>{PHASE_LABELS[phase]?.label?.split(" ")[0]}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {hasPending && (
+        <div className="px-4 py-2 bg-yellow-50 border-t flex items-center justify-between">
+          <span className="text-xs text-yellow-700">{staging.filter((s: any) => s.status === "pending").length} arquivo(s) para revisar</span>
+          <Button size="sm" variant="outline" className="h-6 text-xs border-yellow-400 text-yellow-700 hover:bg-yellow-100" onClick={() => { if (onExpand) onExpand(); }} data-testid={`btn-review-pipeline-${pipelineId}`}>
+            Revisar
+          </Button>
+        </div>
+      )}
+
+      {expanded && (
+        <div className="border-t px-4 py-3 bg-gray-50 space-y-2">
+          {phaseOrder.map((phase) => {
+            const data = phases?.[phase];
+            if (!data || data.status === "pending") return null;
+            return (
+              <div key={phase} className="text-xs">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`font-medium ${data.status === "completed" ? "text-green-700" : data.status === "failed" ? "text-red-600" : "text-blue-700"}`}>
+                    {PHASE_LABELS[phase]?.label}
+                  </span>
+                  {data.duration && <span className="text-gray-400">{Math.round(data.duration / 1000)}s</span>}
+                </div>
+                {data.thought && <p className="text-gray-500 line-clamp-2 ml-2">{data.thought}</p>}
+                {data.error && <p className="text-red-500 ml-2">{data.error}</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PipelinePreviewPanel() {
+  const [previewUrl, setPreviewUrl] = useState("/");
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  return (
+    <Card className="bg-zinc-900 border-zinc-800">
+      <CardHeader className="py-3 border-b border-zinc-800">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm text-zinc-300 flex items-center gap-2"><Monitor className="w-4 h-4" /> Preview ao Vivo do Sistema</CardTitle>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-zinc-800 rounded-lg p-1 gap-1">
+              <Button variant={previewDevice === "desktop" ? "secondary" : "ghost"} size="sm" className="h-7 w-7 p-0" onClick={() => setPreviewDevice("desktop")} data-testid="btn-pp-desktop"><Monitor className="w-3 h-3" /></Button>
+              <Button variant={previewDevice === "tablet" ? "secondary" : "ghost"} size="sm" className="h-7 w-7 p-0" onClick={() => setPreviewDevice("tablet")} data-testid="btn-pp-tablet"><Tablet className="w-3 h-3" /></Button>
+              <Button variant={previewDevice === "mobile" ? "secondary" : "ghost"} size="sm" className="h-7 w-7 p-0" onClick={() => setPreviewDevice("mobile")} data-testid="btn-pp-mobile"><Smartphone className="w-3 h-3" /></Button>
+            </div>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { const iframe = document.getElementById("pipeline-preview-iframe") as HTMLIFrameElement; if (iframe) iframe.src = iframe.src; }} data-testid="btn-pp-refresh"><RefreshCw className="w-3 h-3" /></Button>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => window.open(previewUrl, "_blank")} data-testid="btn-pp-external"><ExternalLink className="w-3 h-3" /></Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-3 space-y-3">
+        <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800 rounded-lg">
+          <Globe className="w-4 h-4 text-zinc-500" />
+          <Input value={previewUrl} onChange={(e: any) => setPreviewUrl(e.target.value)} onKeyDown={(e: any) => { if (e.key === "Enter") { const iframe = document.getElementById("pipeline-preview-iframe") as HTMLIFrameElement; if (iframe) iframe.src = previewUrl; } }} className="border-0 bg-transparent p-0 h-auto text-sm text-zinc-300 focus-visible:ring-0 font-mono" placeholder="/" data-testid="input-pp-url" />
+        </div>
+        <div className={`bg-zinc-950 rounded-lg overflow-hidden border border-zinc-700 mx-auto transition-all ${previewDevice === "desktop" ? "w-full h-[500px]" : previewDevice === "tablet" ? "max-w-[768px] h-[500px]" : "max-w-[375px] h-[667px]"}`}>
+          <iframe id="pipeline-preview-iframe" src={previewUrl} className="w-full h-full bg-white" title="Pipeline Preview" data-testid="iframe-pipeline-preview" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InlineDiffViewer({ original, modified }: { original: string; modified: string }) {
+  const origLines = original.split("\n");
+  const modLines = modified.split("\n");
+  const maxLines = Math.max(origLines.length, modLines.length, 200);
+  const displayLines = Math.min(maxLines, 200);
+  
+  const diffLines: { type: "same" | "add" | "remove" | "modify"; lineNum: number; origLine?: string; modLine?: string }[] = [];
+  
+  for (let i = 0; i < displayLines; i++) {
+    const orig = origLines[i];
+    const mod = modLines[i];
+    if (orig === undefined && mod !== undefined) {
+      diffLines.push({ type: "add", lineNum: i + 1, modLine: mod });
+    } else if (orig !== undefined && mod === undefined) {
+      diffLines.push({ type: "remove", lineNum: i + 1, origLine: orig });
+    } else if (orig === mod) {
+      diffLines.push({ type: "same", lineNum: i + 1, origLine: orig, modLine: mod });
+    } else {
+      diffLines.push({ type: "modify", lineNum: i + 1, origLine: orig, modLine: mod });
+    }
+  }
+  
+  return (
+    <ScrollArea className="h-72">
+      <div className="grid grid-cols-2 text-[11px] font-mono" data-testid="inline-diff-viewer">
+        <div className="border-r border-zinc-800">
+          <div className="px-3 py-1 bg-red-950/30 text-red-400 text-[10px] border-b border-zinc-800 sticky top-0 z-10">Original</div>
+          {diffLines.map((line, idx) => (
+            <div
+              key={`orig-${idx}`}
+              className={`px-3 py-0.5 flex ${
+                line.type === "remove" ? "bg-red-950/40 text-red-300" :
+                line.type === "modify" ? "bg-yellow-950/30 text-yellow-200" :
+                line.type === "add" ? "bg-zinc-900/50 text-zinc-600" :
+                "text-zinc-400"
+              }`}
+            >
+              <span className="text-zinc-600 w-8 shrink-0 text-right pr-2 select-none">{line.lineNum}</span>
+              <span className="whitespace-pre-wrap break-all">{line.type === "add" ? "" : (line.origLine || "")}</span>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div className="px-3 py-1 bg-green-950/30 text-green-400 text-[10px] border-b border-zinc-800 sticky top-0 z-10">Modificado</div>
+          {diffLines.map((line, idx) => (
+            <div
+              key={`mod-${idx}`}
+              className={`px-3 py-0.5 flex ${
+                line.type === "add" ? "bg-green-950/40 text-green-300" :
+                line.type === "modify" ? "bg-green-950/30 text-green-200" :
+                line.type === "remove" ? "bg-zinc-900/50 text-zinc-600" :
+                "text-zinc-400"
+              }`}
+            >
+              <span className="text-zinc-600 w-8 shrink-0 text-right pr-2 select-none">{line.lineNum}</span>
+              <span className="whitespace-pre-wrap break-all">{line.type === "remove" ? "" : (line.modLine || "")}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      {maxLines > 200 && <div className="p-2 text-center text-xs text-zinc-500">... mostrando primeiras 200 linhas de {maxLines}</div>}
+    </ScrollArea>
+  );
+}
+
+function PipelineReviewPanelV2({ pipelineId, changes, onAction }: { pipelineId: number; changes: any[]; onAction: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [expandedFile, setExpandedFile] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("/");
+  const [showPreview, setShowPreview] = useState(true);
+  const allPending = changes.filter(c => c.status === "pending");
+  const pendingMap = new Map<string, any>();
+  for (const c of allPending) { pendingMap.set(c.filePath, c); }
+  const pendingChanges = Array.from(pendingMap.values());
+  useEffect(() => { setSelectedFiles(new Set(pendingChanges.map(c => c.filePath))); }, [changes.length]);
+  const toggleFile = (filePath: string) => { setSelectedFiles(prev => { const next = new Set(prev); if (next.has(filePath)) next.delete(filePath); else next.add(filePath); return next; }); };
+  const approveMutation = useMutation({
+    mutationFn: async () => {
+      const files = Array.from(selectedFiles);
+      const body: any = {};
+      if (files.length < pendingChanges.length) body.selectedFiles = files;
+      const res = await apiRequest("POST", `/api/xos/pipeline/${pipelineId}/approve`, body);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      const applied = data.applied?.length || 0;
+      const errs = data.errors?.length || 0;
+      toast({ title: `${applied} arquivo(s) aplicado(s)${errs > 0 ? `, ${errs} erro(s)` : ""}`, variant: errs > 0 ? "destructive" : "default" });
+      queryClient.invalidateQueries({ queryKey: ["/api/xos/pipeline"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/xos/pipeline/${pipelineId}`] });
+      onAction();
+      const iframe = document.getElementById("review-preview-iframe") as HTMLIFrameElement;
+      if (iframe) setTimeout(() => { iframe.src = iframe.src; }, 1500);
+    },
+    onError: (err: any) => { toast({ title: "Erro ao aprovar", description: err.message, variant: "destructive" }); },
+  });
+  const rejectMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/xos/pipeline/${pipelineId}/reject`),
+    onSuccess: () => { toast({ title: "Alterações rejeitadas" }); queryClient.invalidateQueries({ queryKey: ["/api/xos/pipeline"] }); queryClient.invalidateQueries({ queryKey: [`/api/xos/pipeline/${pipelineId}`] }); onAction(); },
+    onError: (err: any) => { toast({ title: "Erro ao rejeitar", description: err.message, variant: "destructive" }); },
+  });
+  const detectRoute = (filePath: string) => {
+    const pageMatch = filePath.match(/pages\/(\w+)\.tsx/);
+    if (pageMatch) {
+      const name = pageMatch[1];
+      const routeMap: Record<string, string> = { BiWorkspace: "/insights", Cockpit: "/", Agent: "/agent", Fisco: "/fisco", SOE: "/soe", Financeiro: "/financeiro", People: "/people", XosPipeline: "/xos/pipeline", DevCenter: "/dev-center", Admin: "/admin", Chat: "/chat", Tickets: "/tickets", CommCenter: "/comm", ApiHub: "/api-hub", AppCenter: "/apps", MetabaseProxyPage: "/insights", ProxyPage: "/insights", CommercialEnv: "/commercial" };
+      return routeMap[name] || "/";
+    }
+    if (filePath.includes("server/routes")) return "/";
+    if (filePath.includes("modules/")) return "/apps";
+    return null;
+  };
+  useEffect(() => { if (pendingChanges.length > 0) { const firstRoute = pendingChanges.map(c => detectRoute(c.filePath)).find(r => r !== null); if (firstRoute && previewUrl === "/") setPreviewUrl(firstRoute); } }, [pendingChanges.length]);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-yellow-300 flex items-center gap-2"><Eye className="w-4 h-4" /> Revisão de Código — {pendingChanges.length} arquivo(s) pendente(s)</h3>
+        <Button variant="outline" size="sm" className="h-7 border-zinc-700 text-zinc-400" onClick={() => setShowPreview(!showPreview)} data-testid="btn-toggle-preview-v2"><PanelLeft className="w-3 h-3 mr-1" /> {showPreview ? "Esconder" : "Mostrar"} Preview</Button>
+      </div>
+      <div className={`flex gap-4 ${showPreview ? "" : "flex-col"}`}>
+        <div className={`space-y-3 ${showPreview ? "w-1/2" : "w-full"}`}>
+          {pendingChanges.map((change: any) => {
+            const isSelected = selectedFiles.has(change.filePath);
+            const isExpanded = expandedFile === change.filePath;
+            const route = detectRoute(change.filePath);
+            return (
+              <div key={change.id} className={`border rounded-lg overflow-hidden transition-all ${isSelected ? "border-yellow-500/50" : "border-zinc-700/50 opacity-60"}`}>
+                <div className="bg-zinc-800 px-3 py-2 flex items-center gap-2">
+                  <button onClick={() => toggleFile(change.filePath)} className="shrink-0" data-testid={`toggle-review-v2-${change.id}`}>{isSelected ? <CheckSquare className="w-4 h-4 text-yellow-400" /> : <Square className="w-4 h-4 text-zinc-600" />}</button>
+                  <FileCode className="w-4 h-4 text-zinc-400 shrink-0" />
+                  <span className="text-xs font-mono text-zinc-300 truncate flex-1">{change.filePath}</span>
+                  <Badge variant="outline" className="text-[10px] shrink-0">{change.action || (change.originalContent ? "modify" : "create")}</Badge>
+                  {route && showPreview && <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-blue-400" onClick={() => setPreviewUrl(route)} data-testid={`nav-preview-v2-${change.id}`}><Monitor className="w-3 h-3 mr-1" /> Preview</Button>}
+                  <button onClick={() => setExpandedFile(isExpanded ? null : change.filePath)} className="shrink-0" data-testid={`expand-review-v2-${change.id}`}><ChevronRight className={`w-4 h-4 text-zinc-500 transition-transform ${isExpanded ? "rotate-90" : ""}`} /></button>
+                </div>
+                {isExpanded && (
+                  <div className="bg-zinc-950">
+                    {change.originalContent ? (
+                      <InlineDiffViewer original={change.originalContent} modified={change.content || ""} />
+                    ) : (
+                      <ScrollArea className="h-60">
+                        <pre className="p-3 text-xs text-zinc-300 font-mono whitespace-pre-wrap">{change.content?.slice(0, 5000) || ""}{(change.content?.length || 0) > 5000 && "\n\n... (truncado)"}</pre>
+                      </ScrollArea>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <div className="flex gap-3 pt-2">
+            <Button onClick={() => approveMutation.mutate()} disabled={approveMutation.isPending || selectedFiles.size === 0} className="bg-green-600 hover:bg-green-700 flex-1" data-testid="btn-approve-review-v2">
+              {approveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ThumbsUp className="w-4 h-4 mr-2" />}
+              Aprovar {selectedFiles.size < pendingChanges.length ? `${selectedFiles.size} Selecionado(s)` : `Todos (${pendingChanges.length})`}
+            </Button>
+            <Button onClick={() => rejectMutation.mutate()} disabled={rejectMutation.isPending} variant="destructive" data-testid="btn-reject-review-v2">
+              {rejectMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ThumbsDown className="w-4 h-4 mr-2" />}Rejeitar
+            </Button>
+          </div>
+        </div>
+        {showPreview && (
+          <div className="w-1/2">
+            <Card className="bg-zinc-900 border-zinc-800 h-full">
+              <CardHeader className="py-2 border-b border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xs text-zinc-400 flex items-center gap-2"><Monitor className="w-3 h-3" /> Preview — <span className="font-mono text-blue-400">{previewUrl}</span></CardTitle>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { const iframe = document.getElementById("review-preview-iframe") as HTMLIFrameElement; if (iframe) iframe.src = iframe.src; }} data-testid="btn-review-pp-refresh"><RefreshCw className="w-3 h-3" /></Button>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => window.open(previewUrl, "_blank")} data-testid="btn-review-pp-external"><ExternalLink className="w-3 h-3" /></Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-2"><div className="bg-zinc-950 rounded-lg overflow-hidden border border-zinc-700 h-[400px]"><iframe id="review-preview-iframe" src={previewUrl} className="w-full h-full bg-white" title="Review Preview" data-testid="iframe-review-preview-v2" /></div></CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PipelineDetail({ pipelineId }: { pipelineId: number }) {
+  const [streamData, setStreamData] = useState<any>(null);
+  const [detailTab, setDetailTab] = useState("timeline");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: details, refetch } = useQuery<any>({ queryKey: [`/api/xos/pipeline/${pipelineId}`], refetchInterval: 5000 });
+  useEffect(() => {
+    const es = new EventSource(`/api/xos/pipeline/${pipelineId}/stream`);
+    es.addEventListener("status", (e) => { try { setStreamData(JSON.parse(e.data)); } catch {} });
+    es.addEventListener("phase_started", () => refetch());
+    es.addEventListener("phase_completed", () => refetch());
+    es.addEventListener("staging_ready", () => refetch());
+    es.addEventListener("completed", () => refetch());
+    es.addEventListener("failed", () => refetch());
+    es.addEventListener("rolled_back", () => refetch());
+    return () => es.close();
+  }, [pipelineId, refetch]);
+  const rollbackMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/xos/pipeline/${pipelineId}/rollback`),
+    onSuccess: async (res) => { const data = await res.json(); toast({ title: `Rollback: ${data.restored?.length || 0} arquivo(s) restaurado(s)` }); queryClient.invalidateQueries({ queryKey: ["/api/xos/pipeline"] }); refetch(); },
+    onError: (err: any) => { toast({ title: "Erro no rollback", description: err.message, variant: "destructive" }); },
+  });
+  const pipeline = details?.pipeline;
+  const phases = streamData?.phases || pipeline?.phases;
+  const statusInfo = STATUS_BADGES[pipeline?.status || "queued"];
+  const hasAppliedChanges = details?.staging?.some((s: any) => s.status === "applied");
+  const pendingStagingCount = details?.staging?.filter((s: any) => s.status === "pending").length || 0;
+  const hasPendingChanges = pendingStagingCount > 0;
+  useEffect(() => { if (hasPendingChanges && detailTab === "timeline") setDetailTab("review"); if (!hasPendingChanges && detailTab === "review") setDetailTab("timeline"); }, [hasPendingChanges]);
+  return (
+    <div className="space-y-4" data-testid={`pipeline-detail-${pipelineId}`}>
+      {pipeline && (
+        <>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                Pipeline #{pipeline.id}
+                {pipeline.correlationId && <span className="text-[10px] text-zinc-600 font-mono flex items-center gap-1"><Fingerprint className="w-3 h-3" /> {pipeline.correlationId.slice(0, 8)}</span>}
+              </h3>
+              <p className="text-sm text-zinc-400 mt-1">{pipeline.prompt}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {hasAppliedChanges && (
+                <Button variant="outline" size="sm" onClick={() => rollbackMutation.mutate()} disabled={rollbackMutation.isPending} className="border-red-500/50 text-red-400 hover:bg-red-500/10" data-testid="btn-rollback">
+                  {rollbackMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Undo2 className="w-3 h-3 mr-1" />}Rollback
+                </Button>
+              )}
+              <Badge className={statusInfo?.color || "bg-gray-600"}>{statusInfo?.label || pipeline.status}</Badge>
+            </div>
+          </div>
+          <PipelineTimeline phases={phases} />
+          <BudgetMeter budget={streamData?.budget || pipeline?.budget} />
+          <Tabs value={detailTab} onValueChange={setDetailTab}>
+            <TabsList className="bg-zinc-900 border border-zinc-800">
+              <TabsTrigger value="timeline" className="data-[state=active]:bg-zinc-700" data-testid="subtab-timeline"><Clock className="w-3 h-3 mr-1" /> Timeline</TabsTrigger>
+              {hasPendingChanges && <TabsTrigger value="review" className="data-[state=active]:bg-yellow-600" data-testid="subtab-review"><Eye className="w-3 h-3 mr-1" /> Revisar & Aprovar<Badge className="bg-yellow-500 text-[9px] ml-1 h-4 px-1">{pendingStagingCount}</Badge></TabsTrigger>}
+              <TabsTrigger value="preview" className="data-[state=active]:bg-zinc-700" data-testid="subtab-preview"><Monitor className="w-3 h-3 mr-1" /> Preview</TabsTrigger>
+              <TabsTrigger value="runbook" className="data-[state=active]:bg-zinc-700" data-testid="subtab-runbook"><BookOpen className="w-3 h-3 mr-1" /> Runbook</TabsTrigger>
+              <TabsTrigger value="artifacts" className="data-[state=active]:bg-zinc-700" data-testid="subtab-artifacts"><FileCode className="w-3 h-3 mr-1" /> Artefatos</TabsTrigger>
+            </TabsList>
+            <TabsContent value="timeline" className="mt-3 space-y-4">
+              {hasPendingChanges && (
+                <Card className="bg-yellow-500/10 border-yellow-500/30 cursor-pointer hover:bg-yellow-500/15 transition-colors" onClick={() => setDetailTab("review")} data-testid="card-goto-review">
+                  <CardContent className="py-4 flex items-center gap-3">
+                    <Eye className="w-5 h-5 text-yellow-400" />
+                    <div className="flex-1"><p className="text-sm font-medium text-yellow-300">{pendingStagingCount} arquivo(s) aguardando sua aprovação</p><p className="text-xs text-zinc-400">Clique para revisar o código e ver o preview ao vivo</p></div>
+                    <ArrowRight className="w-4 h-4 text-yellow-400" />
+                  </CardContent>
+                </Card>
+              )}
+              {pipeline.error && <Card className="bg-red-500/5 border-red-500/30"><CardContent className="py-3 flex items-start gap-2"><AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" /><p className="text-sm text-red-400">{pipeline.error}</p></CardContent></Card>}
+              {details?.logs?.length > 0 && (
+                <Card className="bg-zinc-900 border-zinc-800">
+                  <CardHeader className="pb-2"><CardTitle className="text-sm text-zinc-400">Log dos Agentes</CardTitle></CardHeader>
+                  <CardContent><ScrollArea className="h-48"><div className="space-y-1">{details.logs.map((log: any, idx: number) => (<div key={idx} className="flex items-start gap-2 text-xs"><Badge variant="outline" className="text-[10px] shrink-0">{log.agentName}</Badge><span className="text-zinc-400">{log.action}:</span><span className="text-zinc-300">{log.thought}</span></div>))}</div></ScrollArea></CardContent>
+                </Card>
+              )}
+            </TabsContent>
+            {hasPendingChanges && <TabsContent value="review" className="mt-3"><PipelineReviewPanelV2 pipelineId={pipelineId} changes={details?.staging || []} onAction={() => { refetch(); queryClient.invalidateQueries({ queryKey: ["/api/xos/pipeline"] }); }} /></TabsContent>}
+            <TabsContent value="preview" className="mt-3"><PipelinePreviewPanel /></TabsContent>
+            <TabsContent value="runbook" className="mt-3"><RunbookView pipelineId={pipelineId} /></TabsContent>
+            <TabsContent value="artifacts" className="mt-3">
+              {details?.artifacts?.length > 0 ? (
+                <Card className="bg-zinc-900 border-zinc-800"><CardContent className="pt-4"><div className="space-y-1">{details.artifacts.map((a: any) => (<div key={a.id} className="flex items-center gap-2 text-xs p-2 bg-zinc-800/50 rounded"><FileCode className="w-3 h-3 text-zinc-500" /><span className="text-zinc-300 font-mono">{a.name}</span><Badge variant="outline" className="text-[10px]">{a.type}</Badge><span className="text-zinc-500 ml-auto">{a.createdBy}</span></div>))}</div></CardContent></Card>
+              ) : <p className="text-sm text-zinc-500 text-center py-4">Nenhum artefato gerado ainda</p>}
+            </TabsContent>
+          </Tabs>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PolicyTestsPanel() {
+  const [results, setResults] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+  const runTests = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/governance/policy-tests");
+      const data = await res.json();
+      setResults(data);
+      toast({ title: data.failed === 0 ? "Todos os testes passaram!" : `${data.failed} teste(s) falharam`, variant: data.failed === 0 ? "default" : "destructive" });
+    } catch (err: any) { toast({ title: "Erro ao executar testes", variant: "destructive" }); }
+    setLoading(false);
+  };
+  return (
+    <Card className="bg-zinc-900 border-zinc-800" data-testid="policy-tests-panel">
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-sm text-zinc-400 flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Policy Tests</CardTitle>
+        <Button variant="outline" size="sm" onClick={runTests} disabled={loading} data-testid="btn-run-policy-tests"><Play className="w-3 h-3 mr-1" /> Executar Testes</Button>
+      </CardHeader>
+      {results && (
+        <CardContent>
+          <div className="flex items-center gap-4 mb-3 text-sm">
+            <Badge className="bg-green-600">{results.passed} passaram</Badge>
+            {results.failed > 0 && <Badge className="bg-red-600">{results.failed} falharam</Badge>}
+            <span className="text-xs text-zinc-500">Total: {results.total}</span>
+          </div>
+          <ScrollArea className="h-48"><div className="space-y-1">{results.results?.map((r: any, idx: number) => (<div key={idx} className={`flex items-start gap-2 p-2 rounded text-xs ${r.passed ? "bg-green-500/5" : "bg-red-500/10"}`}>{r.passed ? <CheckCircle className="w-3 h-3 text-green-400 mt-0.5 shrink-0" /> : <XCircle className="w-3 h-3 text-red-400 mt-0.5 shrink-0" />}<div><span className="text-zinc-300">{r.description}</span>{!r.passed && <p className="text-red-400 mt-0.5">Esperado: {r.expected ? "permitido" : "bloqueado"}, Recebido: {r.actual ? "permitido" : "bloqueado"}</p>}</div></div>))}</div></ScrollArea>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+function AgentTerminal() {
+  const { data } = useQuery<any>({
+    queryKey: ["/api/xos/pipeline/agent-terminal"],
+    refetchInterval: 3000,
+  });
+  const logs = data?.logs || [];
+  const terminalRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  return (
+    <Card className="mt-3">
+      <CardHeader className="py-2 px-4 bg-gray-900 rounded-t-lg">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <div className="w-3 h-3 rounded-full bg-yellow-500" />
+            <div className="w-3 h-3 rounded-full bg-green-500" />
+          </div>
+          <span className="text-xs text-green-400 font-mono ml-2">Terminal do Agente</span>
+          <Badge className="bg-gray-700 text-gray-300 text-[10px] ml-auto">{logs.length} comandos</Badge>
+        </div>
+      </CardHeader>
+      <div
+        ref={terminalRef}
+        className="bg-gray-950 text-green-400 font-mono text-xs p-4 rounded-b-lg max-h-[300px] overflow-y-auto"
+        data-testid="agent-terminal-output"
+      >
+        {logs.length === 0 ? (
+          <div className="text-gray-600 flex items-center gap-2">
+            <span className="animate-pulse">_</span> Aguardando comandos do agente...
+          </div>
+        ) : (
+          logs.map((log: any, idx: number) => (
+            <div key={idx} className="mb-3 border-b border-gray-800 pb-2 last:border-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-gray-500">{new Date(log.timestamp).toLocaleTimeString("pt-BR")}</span>
+                <span className={log.success ? "text-green-500" : "text-red-500"}>
+                  {log.success ? "✓" : "✗"}
+                </span>
+              </div>
+              <div className="text-blue-400 mb-1">$ {log.command}</div>
+              {log.output && (
+                <pre className="text-gray-400 whitespace-pre-wrap text-[11px] max-h-[100px] overflow-y-auto">{log.output.slice(0, 2000)}</pre>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export default function DevCenter() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -761,31 +1438,102 @@ export default function DevCenter() {
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
   
-  const [devPrompt, setDevPrompt] = useState("");
   const [autoCommit, setAutoCommit] = useState(false);
   const [targetBranch, setTargetBranch] = useState("main");
-  const [devResult, setDevResult] = useState<any>(null);
-  const [previewResult, setPreviewResult] = useState<any>(null);
-  const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  const [attachedContent, setAttachedContent] = useState<string>("");
   const [attachedImages, setAttachedImages] = useState<{ name: string; base64: string; preview: string }[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
+  const [planContext, setPlanContext] = useState<string | null>(null);
+  const [showTerminal, setShowTerminal] = useState(false);
+
+  const [selectedPipeline, setSelectedPipeline] = useState<number | null>(null);
+  const [pipelineAttachedFiles, setPipelineAttachedFiles] = useState<{ name: string; content: string; type: string }[]>([]);
+  const [pipelinePlanObjective, setPipelinePlanObjective] = useState("");
+  const [pipelinePlanRefs, setPipelinePlanRefs] = useState("");
+  const [showPipelinePlan, setShowPipelinePlan] = useState(false);
+  const pipelineFileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: pipelinesData, refetch: refetchPipelines } = useQuery<any>({
+    queryKey: ["/api/xos/pipeline"],
+    refetchInterval: 10000,
+  });
+
+  const createPipelineMutation = useMutation({
+    mutationFn: async (promptText: string) => {
+      const res = await apiRequest("POST", "/api/xos/pipeline", { prompt: promptText });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Pipeline iniciado!" });
+      setSelectedPipeline(data.pipeline.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/xos/pipeline"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro ao criar pipeline", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const pipelines = pipelinesData?.pipelines || [];
+  const runningPipelineCount = pipelines.filter((p: any) => p.status === "running").length;
+  const stagingPipelineCount = pipelines.filter((p: any) => p.status === "staging_review" || p.hasPendingChanges).length;
+
+  const loadedPipelineIdsRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (pipelines.length === 0) return;
+    const activePipelines = pipelines.filter((p: any) =>
+      (p.status === "running" || p.status === "staging_review" || p.hasPendingChanges) &&
+      !loadedPipelineIdsRef.current.has(p.id)
+    );
+    if (activePipelines.length > 0) {
+      activePipelines.forEach((p: any) => loadedPipelineIdsRef.current.add(p.id));
+      const pipelineMsgs: ChatMessage[] = activePipelines.map((p: any) => ({
+        id: `pipeline-restore-${p.id}`,
+        role: "assistant" as const,
+        content: `Pipeline #${p.id}`,
+        timestamp: new Date(p.createdAt || Date.now()),
+        type: "pipeline" as const,
+        pipelineId: p.id,
+      }));
+      setChatMessages(prev => {
+        const existingPipelineIds = prev.filter(m => m.type === "pipeline").map(m => m.pipelineId);
+        const existingSet = new Set(existingPipelineIds);
+        const newMsgs = pipelineMsgs.filter(m => !existingSet.has(m.pipelineId));
+        return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
+      });
+    }
+  }, [pipelines]);
+
+  const handlePipelineFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const newFiles = await Promise.all(
+      Array.from(files).map(async (f) => {
+        const content = await f.text();
+        return { name: f.name, content: content.slice(0, 50000), type: f.type };
+      })
+    );
+    setPipelineAttachedFiles(prev => [...prev, ...newFiles]);
+    if (pipelineFileInputRef.current) pipelineFileInputRef.current.value = "";
+  };
+
 
   interface ChatMessage {
     id: string;
     role: "user" | "assistant";
     content: string;
     timestamp: Date;
-    type?: "text" | "spec" | "code" | "error" | "success";
+    type?: "text" | "spec" | "code" | "error" | "success" | "pipeline" | "review";
     data?: any;
     images?: { name: string; base64: string; preview: string }[];
+    pipelineId?: number;
   }
   
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: "Olá! Sou o agente de desenvolvimento autônomo da Arcádia. Descreva o que você quer criar e eu vou projetar, codificar e validar automaticamente. Por exemplo:\n\n• \"Criar um módulo de gestão de clientes\"\n• \"Fazer uma página de cadastro de produtos\"\n• \"Adicionar um dashboard de vendas\"",
+      content: "Descreva o que deseja criar. Os agentes vão projetar, codificar e validar automaticamente.",
       timestamp: new Date(),
       type: "text"
     }
@@ -861,82 +1609,6 @@ export default function DevCenter() {
     }
   });
 
-  const previewMutation = useMutation({
-    mutationFn: async (description: string) => {
-      const res = await apiRequest("POST", "/api/autonomous/preview", { description });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setPreviewResult(data);
-      toast({
-        title: data.success ? "Preview gerado" : "Erro",
-        description: data.success ? "Especificação criada com sucesso" : data.error,
-        variant: data.success ? "default" : "destructive"
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro no preview",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  });
-
-  const developMutation = useMutation({
-    mutationFn: async (params: { description: string; autoCommit: boolean; targetBranch: string }) => {
-      const res = await apiRequest("POST", "/api/autonomous/develop", params);
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setDevResult(data);
-      const responseMsg: ChatMessage = {
-        id: `response-${Date.now()}`,
-        role: "assistant",
-        content: data.success 
-          ? `Pronto! ${data.phase === "completed" ? "Desenvolvimento concluído com sucesso!" : `Fase atual: ${data.phase}`}`
-          : `Ocorreu um erro: ${data.error}`,
-        timestamp: new Date(),
-        type: data.success ? "success" : "error",
-        data: data
-      };
-      setChatMessages(prev => [...prev, responseMsg]);
-      
-      if (data.spec) {
-        const specMsg: ChatMessage = {
-          id: `spec-${Date.now()}`,
-          role: "assistant",
-          content: `📋 **${data.spec.name || "Especificação"}**\n\n${data.spec.description || ""}\n\n**Componentes:** ${data.spec.components?.join(", ") || "N/A"}\n\n**Tecnologias:** ${data.spec.technologies?.join(", ") || "N/A"}`,
-          timestamp: new Date(),
-          type: "spec",
-          data: data.spec
-        };
-        setChatMessages(prev => [...prev, specMsg]);
-      }
-      
-      if (data.files?.length > 0) {
-        const filesMsg: ChatMessage = {
-          id: `files-${Date.now()}`,
-          role: "assistant",
-          content: `📁 **Arquivos gerados:**\n\n${data.files.map((f: any) => `• ${f.path}`).join("\n")}`,
-          timestamp: new Date(),
-          type: "code",
-          data: data.files
-        };
-        setChatMessages(prev => [...prev, filesMsg]);
-      }
-    },
-    onError: (error: any) => {
-      const errorMsg: ChatMessage = {
-        id: `error-${Date.now()}`,
-        role: "assistant",
-        content: `Erro no desenvolvimento: ${error.message}`,
-        timestamp: new Date(),
-        type: "error"
-      };
-      setChatMessages(prev => [...prev, errorMsg]);
-    }
-  });
   
   const processImageFile = (file: File): Promise<{ name: string; base64: string; preview: string }> => {
     return new Promise((resolve, reject) => {
@@ -1000,107 +1672,51 @@ export default function DevCenter() {
   const handleSendChat = () => {
     if (!chatInput.trim() && attachedImages.length === 0) return;
     
-    const msgContent = attachedImages.length > 0 
-      ? `${attachedImages.map(img => `[🖼️ ${img.name}]`).join(" ")}\n\n${chatInput}`.trim()
-      : chatInput;
+    let fullPrompt = chatInput;
+    if (pipelinePlanObjective) fullPrompt = `[Objetivo: ${pipelinePlanObjective}]\n\n${fullPrompt}`;
+    if (pipelinePlanRefs) fullPrompt = `${fullPrompt}\n\n--- REFERÊNCIAS ---\n${pipelinePlanRefs}`;
+    if (pipelineAttachedFiles.length > 0) fullPrompt = `${fullPrompt}\n\n--- ARQUIVOS ANEXADOS ---\n${pipelineAttachedFiles.map(f => `[${f.name}]\n${f.content.slice(0, 10000)}`).join("\n\n")}`;
+    if (attachedImages.length > 0) fullPrompt = `${fullPrompt}\n\n[Imagens anexadas: ${attachedImages.map(img => img.name).join(", ")}]`;
     
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: msgContent,
-      timestamp: new Date(),
-      type: "text",
-      images: attachedImages.length > 0 ? [...attachedImages] : undefined
-    };
+    const msgContent = attachedImages.length > 0 
+      ? `${attachedImages.map(img => `[img ${img.name}]`).join(" ")}\n\n${chatInput}`.trim()
+      : chatInput;
+    const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: "user", content: msgContent, timestamp: new Date(), type: "text", images: attachedImages.length > 0 ? [...attachedImages] : undefined };
     setChatMessages(prev => [...prev, userMsg]);
     
-    const thinkingMsg: ChatMessage = {
-      id: `thinking-${Date.now()}`,
-      role: "assistant",
-      content: "Analisando sua solicitação e preparando o desenvolvimento...",
-      timestamp: new Date(),
-      type: "text"
-    };
+    const modeLabel = agentMode === "plan" ? "Analisando projeto e gerando plano..." : "Iniciando pipeline autônomo com 6 agentes...";
+    const thinkingMsg: ChatMessage = { id: `thinking-${Date.now()}`, role: "assistant", content: modeLabel, timestamp: new Date(), type: "text" };
     setChatMessages(prev => [...prev, thinkingMsg]);
     
-    const descriptionWithImages = attachedImages.length > 0
-      ? `${chatInput}\n\n[Imagens anexadas: ${attachedImages.map(img => img.name).join(", ")}]`
-      : chatInput;
-    
-    const currentImages = [...attachedImages];
     setChatInput("");
     setAttachedImages([]);
+    setPipelineAttachedFiles([]);
+    setPipelinePlanObjective("");
+    setPipelinePlanRefs("");
+    setShowPipelinePlan(false);
     
-    fetch("/api/blackboard/develop", {
+    fetch("/api/xos/pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
-        description: descriptionWithImages, 
-        autoCommit, 
-        targetBranch,
-        images: currentImages.map(img => ({ name: img.name, base64: img.base64 }))
+        prompt: fullPrompt, 
+        mode: agentMode,
+        planContext: agentMode === "act" ? planContext : undefined,
       })
     })
       .then(res => res.json())
       .then(data => {
-        const responseMsg: ChatMessage = {
-          id: `response-${Date.now()}`,
-          role: "assistant",
-          content: data.success 
-            ? `Pronto! ${data.phase === "completed" ? "Desenvolvimento concluído com sucesso!" : `Fase atual: ${data.phase}`}`
-            : `Ocorreu um erro: ${data.error}`,
-          timestamp: new Date(),
-          type: data.success ? "success" : "error",
-          data: data
-        };
-        setChatMessages(prev => [...prev.filter(m => !m.id.startsWith("thinking")), responseMsg]);
-        
-        if (data.spec) {
-          try {
-            const spec = typeof data.spec === "string" ? JSON.parse(data.spec) : data.spec;
-            const specMsg: ChatMessage = {
-              id: `spec-${Date.now()}`,
-              role: "assistant",
-              content: `📋 **${spec.moduleName || "Especificação"}**\n\n${spec.description || ""}\n\n**Componentes:** ${spec.ui?.components?.map((c: any) => c.name).join(", ") || "N/A"}\n\n**APIs:** ${spec.api?.routes?.map((r: any) => `${r.method} ${r.path}`).join(", ") || "N/A"}`,
-              timestamp: new Date(),
-              type: "spec",
-              data: spec
-            };
-            setChatMessages(prev => [...prev, specMsg]);
-          } catch {}
-        }
-        
-        if (data.files?.length > 0) {
-          const filesMsg: ChatMessage = {
-            id: `files-${Date.now()}`,
-            role: "assistant",
-            content: `📁 **Arquivos gerados:**\n\n${data.files.map((f: any) => `• ${f.path}`).join("\n")}`,
-            timestamp: new Date(),
-            type: "code",
-            data: data.files
-          };
-          setChatMessages(prev => [...prev, filesMsg]);
-        }
-        
-        if (data.log?.length > 0) {
-          const logMsg: ChatMessage = {
-            id: `log-${Date.now()}`,
-            role: "assistant",
-            content: `📝 **Log dos Agentes:**\n\n${data.log.slice(-5).join("\n")}`,
-            timestamp: new Date(),
-            type: "text"
-          };
-          setChatMessages(prev => [...prev, logMsg]);
+        if (data.pipeline) {
+          setSelectedPipeline(data.pipeline.id);
+          const pipelineMsg: ChatMessage = { id: `pipeline-${data.pipeline.id}`, role: "assistant", content: `Pipeline #${data.pipeline.id} iniciado`, timestamp: new Date(), type: "pipeline", pipelineId: data.pipeline.id };
+          setChatMessages(prev => [...prev.filter(m => !m.id.startsWith("thinking")), pipelineMsg]);
+        } else {
+          const errorMsg: ChatMessage = { id: `error-${Date.now()}`, role: "assistant", content: `Erro: ${data.error || "Falha ao criar pipeline"}`, timestamp: new Date(), type: "error" };
+          setChatMessages(prev => [...prev.filter(m => !m.id.startsWith("thinking")), errorMsg]);
         }
       })
       .catch(err => {
-        const errorMsg: ChatMessage = {
-          id: `error-${Date.now()}`,
-          role: "assistant",
-          content: `Erro: ${err.message}`,
-          timestamp: new Date(),
-          type: "error"
-        };
+        const errorMsg: ChatMessage = { id: `error-${Date.now()}`, role: "assistant", content: `Erro: ${err.message}`, timestamp: new Date(), type: "error" };
         setChatMessages(prev => [...prev.filter(m => !m.id.startsWith("thinking")), errorMsg]);
       });
   };
@@ -1221,8 +1837,10 @@ export default function DevCenter() {
 
         <Tabs defaultValue="develop" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="develop" data-testid="tab-develop">
+            <TabsTrigger value="develop" data-testid="tab-develop" className="relative">
               <Sparkles className="w-4 h-4 mr-2" /> Desenvolver
+              {runningPipelineCount > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />}
+              {stagingPipelineCount > 0 && <span className="absolute -top-1 right-1 w-2 h-2 bg-yellow-500 rounded-full" />}
             </TabsTrigger>
             <TabsTrigger value="status" data-testid="tab-status">
               <Settings className="w-4 h-4 mr-2" /> Status
@@ -1246,24 +1864,15 @@ export default function DevCenter() {
 
           <TabsContent value="develop" className="space-y-0">
             <Card className="flex flex-col h-[calc(100vh-220px)] min-h-[500px]">
-              <CardHeader className="border-b bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-t-lg py-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white/20 rounded-full">
-                    <Bot className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">Agente de Desenvolvimento</CardTitle>
-                    <CardDescription className="text-white/80 text-sm">
-                      Converse comigo para criar qualquer funcionalidade
-                    </CardDescription>
-                  </div>
-                  <div className="ml-auto flex items-center gap-2">
-                    {developMutation.isPending && (
-                      <Badge className="bg-yellow-500 animate-pulse">
-                        <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Desenvolvendo...
-                      </Badge>
-                    )}
-                  </div>
+              <CardHeader className="border-b py-3 px-4">
+                <div className="flex items-center gap-2">
+                  <Bot className="w-5 h-5 text-purple-600" />
+                  <CardTitle className="text-sm font-semibold">Dev Agent</CardTitle>
+                  {createPipelineMutation.isPending && (
+                    <span className="text-xs text-amber-500 flex items-center gap-1 ml-2">
+                      <Loader2 className="w-3 h-3 animate-spin" /> criando...
+                    </span>
+                  )}
                 </div>
               </CardHeader>
               
@@ -1275,471 +1884,132 @@ export default function DevCenter() {
                       className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
                       data-testid={`chat-message-${msg.id}`}
                     >
-                      <Avatar className={`h-8 w-8 ${msg.role === "user" ? "bg-blue-500" : "bg-purple-600"}`}>
-                        <AvatarFallback className="text-white text-xs">
-                          {msg.role === "user" ? "EU" : "IA"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div
-                        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                          msg.role === "user"
-                            ? "bg-blue-500 text-white rounded-tr-sm"
-                            : msg.type === "error"
-                            ? "bg-red-50 border border-red-200 text-red-800 rounded-tl-sm"
-                            : msg.type === "success"
-                            ? "bg-green-50 border border-green-200 text-green-800 rounded-tl-sm"
-                            : msg.type === "spec"
-                            ? "bg-purple-50 border border-purple-200 rounded-tl-sm"
-                            : msg.type === "code"
-                            ? "bg-gray-900 text-gray-100 font-mono text-sm rounded-tl-sm"
-                            : "bg-gray-100 rounded-tl-sm"
-                        }`}
-                      >
-                        {msg.images && msg.images.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mb-2">
-                            {msg.images.map((img, idx) => (
-                              <img 
-                                key={idx}
-                                src={img.preview}
-                                alt={img.name}
-                                className="max-w-[200px] max-h-[150px] rounded-lg border border-white/20 cursor-pointer hover:opacity-80 transition-opacity"
-                                onClick={() => window.open(img.preview, "_blank")}
-                                data-testid={`chat-image-${msg.id}-${idx}`}
-                              />
-                            ))}
+                      {msg.type === "pipeline" && msg.pipelineId ? (
+                        <InlinePipelineTracker pipelineId={msg.pipelineId} />
+                      ) : (
+                        <>
+                          <Avatar className={`h-8 w-8 ${msg.role === "user" ? "bg-blue-500" : "bg-purple-600"}`}>
+                            <AvatarFallback className="text-white text-xs">
+                              {msg.role === "user" ? "EU" : "IA"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div
+                            className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                              msg.role === "user"
+                                ? "bg-blue-500 text-white rounded-tr-sm"
+                                : msg.type === "error"
+                                ? "bg-red-50 border border-red-200 text-red-800 rounded-tl-sm"
+                                : msg.type === "success"
+                                ? "bg-green-50 border border-green-200 text-green-800 rounded-tl-sm"
+                                : msg.type === "spec"
+                                ? "bg-purple-50 border border-purple-200 rounded-tl-sm"
+                                : msg.type === "code"
+                                ? "bg-gray-900 text-gray-100 font-mono text-sm rounded-tl-sm"
+                                : "bg-gray-100 rounded-tl-sm"
+                            }`}
+                          >
+                            {msg.images && msg.images.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {msg.images.map((img, idx) => (
+                                  <img 
+                                    key={idx}
+                                    src={img.preview}
+                                    alt={img.name}
+                                    className="max-w-[200px] max-h-[150px] rounded-lg border border-white/20 cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={() => window.open(img.preview, "_blank")}
+                                    data-testid={`chat-image-${msg.id}-${idx}`}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                            <p className={`text-xs mt-1 ${msg.role === "user" ? "text-blue-100" : "text-gray-400"}`}>
+                              {msg.timestamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                            </p>
                           </div>
-                        )}
-                        <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
-                        <p className={`text-xs mt-1 ${msg.role === "user" ? "text-blue-100" : "text-gray-400"}`}>
-                          {msg.timestamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                        </p>
-                      </div>
+                        </>
+                      )}
                     </div>
                   ))}
                   <div ref={chatEndRef} />
                 </div>
               </ScrollArea>
               
-              <div className="border-t p-4 bg-gray-50 rounded-b-lg">
-                <div className="flex items-center gap-2 mb-3">
-                  <Switch
-                    checked={autoCommit}
-                    onCheckedChange={setAutoCommit}
-                    id="auto-commit-chat"
-                  />
-                  <Label htmlFor="auto-commit-chat" className="text-xs text-muted-foreground">
-                    Commit automático
-                  </Label>
-                  <span className="text-xs text-muted-foreground">|</span>
-                  <Label className="text-xs text-muted-foreground">Branch:</Label>
-                  <Input
-                    value={targetBranch}
-                    onChange={(e) => setTargetBranch(e.target.value)}
-                    className="h-6 w-24 text-xs"
-                  />
-                </div>
-                {attachedImages.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3 p-2 bg-white rounded-lg border">
+              <div className="border-t p-3 bg-gray-50/80 rounded-b-lg space-y-2">
+                {(attachedImages.length > 0 || pipelineAttachedFiles.length > 0) && (
+                  <div className="flex flex-wrap gap-1.5">
                     {attachedImages.map((img, idx) => (
-                      <div key={idx} className="relative group">
-                        <img 
-                          src={img.preview} 
-                          alt={img.name}
-                          className="w-16 h-16 object-cover rounded-lg border"
-                          data-testid={`attached-image-${idx}`}
-                        />
-                        <button
-                          onClick={() => removeImage(idx)}
-                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                          data-testid={`remove-image-${idx}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                        <span className="text-[10px] text-gray-500 truncate block w-16 text-center mt-1">{img.name}</span>
+                      <div key={`img-${idx}`} className="relative group">
+                        <img src={img.preview} alt={img.name} className="w-12 h-12 object-cover rounded border" data-testid={`attached-image-${idx}`} />
+                        <button onClick={() => removeImage(idx)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" data-testid={`remove-image-${idx}`}><X className="w-2.5 h-2.5" /></button>
+                      </div>
+                    ))}
+                    {pipelineAttachedFiles.map((f, idx) => (
+                      <div key={`file-${idx}`} className="flex items-center gap-1 px-2 py-1 bg-white rounded border text-[10px] text-gray-600">
+                        <FileText className="w-3 h-3 text-blue-500" />
+                        <span className="truncate max-w-[80px]">{f.name}</span>
+                        <button onClick={() => setPipelineAttachedFiles(prev => prev.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><X className="w-2.5 h-2.5" /></button>
                       </div>
                     ))}
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <input
-                    type="file"
-                    ref={imageInputRef}
-                    onChange={handleImageSelect}
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    data-testid="input-image-file"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={developMutation.isPending}
-                    title="Anexar imagem"
-                    className="shrink-0"
-                    data-testid="button-attach-image"
-                  >
-                    <ImageIcon className="w-4 h-4 text-gray-500" />
-                  </Button>
-                  <Input
-                    placeholder="Digite o que você quer criar ou cole uma imagem (Ctrl+V)..."
+
+                <div className="flex gap-2 items-end">
+                  <input type="file" ref={imageInputRef} onChange={handleImageSelect} accept="image/*" multiple className="hidden" data-testid="input-image-file" />
+                  <input type="file" ref={pipelineFileInputRef} onChange={handlePipelineFileSelect} accept=".pdf,.txt,.csv,.docx,.json,.md" multiple className="hidden" data-testid="input-pipeline-file-unified" />
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => imageInputRef.current?.click()} disabled={createPipelineMutation.isPending} title="Imagem" data-testid="button-attach-image">
+                      <ImageIcon className="w-3.5 h-3.5 text-gray-400" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => pipelineFileInputRef.current?.click()} disabled={createPipelineMutation.isPending} title="Arquivo" data-testid="button-attach-file-unified">
+                      <Paperclip className="w-3.5 h-3.5 text-gray-400" />
+                    </Button>
+                  </div>
+                  <Textarea
+                    placeholder="Descreva o que deseja criar..."
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendChat();
-                      }
-                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
                     onPaste={handlePaste}
-                    disabled={developMutation.isPending}
-                    className="flex-1"
+                    disabled={createPipelineMutation.isPending}
+                    className="flex-1 min-h-[38px] max-h-[100px] resize-none text-sm"
+                    rows={1}
                     data-testid="input-chat"
                   />
                   <Button
                     onClick={handleSendChat}
-                    disabled={(!chatInput.trim() && attachedImages.length === 0) || developMutation.isPending}
-                    className="bg-purple-600 hover:bg-purple-700"
+                    disabled={(!chatInput.trim() && attachedImages.length === 0) || createPipelineMutation.isPending}
+                    className={`self-end shrink-0 ${agentMode === "plan" ? "bg-amber-500 hover:bg-amber-600" : "bg-purple-600 hover:bg-purple-700"}`}
                     data-testid="button-send-chat"
                   >
-                    {developMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Play className="w-4 h-4" />
-                    )}
+                    {createPipelineMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : agentMode === "plan" ? <BookOpen className="w-4 h-4" /> : <Rocket className="w-4 h-4" />}
                   </Button>
                 </div>
+
+                <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                  <div className="flex items-center bg-white rounded border p-0.5 gap-0.5" data-testid="mode-toggle">
+                    <button onClick={() => setAgentMode("plan")} className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${agentMode === "plan" ? "bg-amber-500 text-white" : "text-gray-400 hover:text-gray-600"}`} data-testid="btn-plan-mode">Planejar</button>
+                    <button onClick={() => setAgentMode("act")} className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${agentMode === "act" ? "bg-purple-500 text-white" : "text-gray-400 hover:text-gray-600"}`} data-testid="btn-act-mode">Executar</button>
+                  </div>
+                  {planContext && agentMode === "act" && <span className="text-amber-500">plano carregado</span>}
+                  <button onClick={() => setShowTerminal(!showTerminal)} className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${showTerminal ? "bg-gray-800 text-green-400" : "hover:text-gray-600"}`} data-testid="btn-toggle-terminal">
+                    <Monitor className="w-3 h-3" /> terminal
+                  </button>
+                  <button onClick={() => setShowPipelinePlan(!showPipelinePlan)} className="hover:text-gray-600 transition-colors" data-testid="btn-toggle-plan-unified">
+                    + contexto
+                  </button>
+                </div>
+
+                {showPipelinePlan && (
+                  <div className="space-y-1.5 p-2 bg-white rounded border">
+                    <Input value={pipelinePlanObjective} onChange={(e) => setPipelinePlanObjective(e.target.value)} placeholder="Objetivo (opcional)" className="text-xs h-7" data-testid="input-plan-objective-unified" />
+                    <Textarea value={pipelinePlanRefs} onChange={(e) => setPipelinePlanRefs(e.target.value)} placeholder="Referências, specs..." className="text-xs min-h-[40px] resize-none" data-testid="input-plan-refs-unified" />
+                  </div>
+                )}
               </div>
             </Card>
-          </TabsContent>
-          
-          <TabsContent value="develop-old" className="space-y-6 hidden">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5" /> Desenvolvimento Autônomo (Antigo)
-                </CardTitle>
-                <CardDescription>
-                  Descreva o que você quer criar e os agentes de IA vão projetar, codificar e validar automaticamente
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="dev-prompt">O que você quer criar?</Label>
-                  <Textarea
-                    id="dev-prompt"
-                    placeholder="Ex: Criar um módulo de gestão de clientes com cadastro, listagem e busca. Integrar com o ERP existente..."
-                    value={devPrompt}
-                    onChange={(e) => setDevPrompt(e.target.value)}
-                    className="min-h-32"
-                    data-testid="textarea-dev-prompt"
-                  />
-                </div>
 
-                <div className="space-y-2">
-                  <Label>Anexar documento de referência (opcional)</Label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="file"
-                      id="file-upload"
-                      className="hidden"
-                      accept=".txt,.md,.docx,.pdf,.json,.xml"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          setAttachedFile(file);
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            const content = event.target?.result as string;
-                            setAttachedContent(content || "");
-                          };
-                          reader.readAsText(file);
-                        }
-                      }}
-                      data-testid="input-file-upload"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => document.getElementById("file-upload")?.click()}
-                      data-testid="button-attach-file"
-                    >
-                      <Paperclip className="w-4 h-4 mr-2" />
-                      Anexar arquivo
-                    </Button>
-                    {attachedFile && (
-                      <div className="flex items-center gap-2 px-3 py-1 bg-muted rounded-lg">
-                        <FileText className="w-4 h-4 text-blue-500" />
-                        <span className="text-sm">{attachedFile.name}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => {
-                            setAttachedFile(null);
-                            setAttachedContent("");
-                          }}
-                          data-testid="button-remove-file"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  {attachedContent && (
-                    <div className="mt-2 p-3 bg-muted rounded-lg max-h-32 overflow-auto">
-                      <p className="text-xs text-muted-foreground mb-1">Preview do conteúdo:</p>
-                      <pre className="text-xs whitespace-pre-wrap" data-testid="text-file-preview">
-                        {attachedContent.slice(0, 500)}{attachedContent.length > 500 ? "..." : ""}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <Label>Commit automático</Label>
-                      <p className="text-xs text-muted-foreground">Salvar no GitHub após validação</p>
-                    </div>
-                    <Switch
-                      checked={autoCommit}
-                      onCheckedChange={setAutoCommit}
-                      data-testid="switch-auto-commit"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Branch de destino</Label>
-                    <Input
-                      value={targetBranch}
-                      onChange={(e) => setTargetBranch(e.target.value)}
-                      placeholder="main"
-                      data-testid="input-target-branch"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => previewMutation.mutate(attachedContent ? `${devPrompt}\n\n--- DOCUMENTO DE REFERÊNCIA ---\n${attachedContent}` : devPrompt)}
-                    disabled={!devPrompt.trim() || previewMutation.isPending}
-                    data-testid="button-preview"
-                  >
-                    {previewMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Eye className="w-4 h-4 mr-2" />
-                    )}
-                    Ver Preview
-                  </Button>
-                  <Button
-                    onClick={() => developMutation.mutate({ description: attachedContent ? `${devPrompt}\n\n--- DOCUMENTO DE REFERÊNCIA ---\n${attachedContent}` : devPrompt, autoCommit, targetBranch })}
-                    disabled={!devPrompt.trim() || developMutation.isPending}
-                    data-testid="button-develop"
-                  >
-                    {developMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Play className="w-4 h-4 mr-2" />
-                    )}
-                    Desenvolver
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {previewResult?.success && previewResult.spec && (
-              <Card data-testid="card-preview-result" className="border-blue-200 bg-gradient-to-br from-blue-50 to-white">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2 text-blue-700">
-                      <Eye className="w-5 h-5" /> 📋 Plano de Desenvolvimento
-                    </CardTitle>
-                    <Badge className="bg-blue-500">Preview</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {previewResult.spec.name && (
-                    <div className="p-4 bg-white rounded-lg border">
-                      <h3 className="font-bold text-lg mb-1" data-testid="text-spec-name">{previewResult.spec.name}</h3>
-                      <p className="text-muted-foreground text-sm">{previewResult.spec.description}</p>
-                    </div>
-                  )}
-                  
-                  {previewResult.spec.components && previewResult.spec.components.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="font-medium flex items-center gap-2">🧩 Componentes a Criar</h4>
-                      <div className="grid gap-2">
-                        {previewResult.spec.components.map((comp: any, idx: number) => (
-                          <div key={idx} className="flex items-center gap-3 p-3 bg-white rounded-lg border" data-testid={`card-component-${idx}`}>
-                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-sm">
-                              {idx + 1}
-                            </div>
-                            <div className="flex-1">
-                              <p className="font-medium">{comp.name || comp}</p>
-                              {comp.type && <p className="text-xs text-muted-foreground">{comp.type}</p>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {previewResult.spec.features && previewResult.spec.features.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="font-medium flex items-center gap-2">✨ Funcionalidades</h4>
-                      <div className="grid gap-1">
-                        {previewResult.spec.features.map((feat: string, idx: number) => (
-                          <div key={idx} className="flex items-center gap-2 text-sm" data-testid={`text-feature-${idx}`}>
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                            <span>{feat}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {previewResult.spec.technologies && (
-                    <div className="space-y-2">
-                      <h4 className="font-medium flex items-center gap-2">🛠️ Tecnologias</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {previewResult.spec.technologies.map((tech: string, idx: number) => (
-                          <Badge key={idx} variant="secondary" data-testid={`badge-tech-${idx}`}>{tech}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {previewResult.log && previewResult.log.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="font-medium flex items-center gap-2">📝 Raciocínio do Agente</h4>
-                      <div className="p-3 bg-gray-50 rounded-lg border text-sm space-y-1">
-                        {previewResult.log.map((line: string, idx: number) => (
-                          <p key={idx} className="text-muted-foreground">{line}</p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {devResult && (
-              <Card data-testid="card-dev-result" className={devResult.success ? "border-green-200 bg-gradient-to-br from-green-50 to-white" : "border-red-200 bg-gradient-to-br from-red-50 to-white"}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      {devResult.success ? (
-                        <>
-                          <CheckCircle className="w-5 h-5 text-green-500" />
-                          <span className="text-green-700">✅ Desenvolvimento Concluído</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-5 h-5 text-red-500" />
-                          <span className="text-red-700">❌ Erro no Desenvolvimento</span>
-                        </>
-                      )}
-                    </CardTitle>
-                    <Badge variant={devResult.success ? "default" : "destructive"}>
-                      Fase: {devResult.phase}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {devResult.spec && (
-                    <div className="p-4 bg-white rounded-lg border">
-                      <h3 className="font-bold text-lg mb-1">{devResult.spec.name}</h3>
-                      <p className="text-muted-foreground text-sm">{devResult.spec.description}</p>
-                    </div>
-                  )}
-
-                  {devResult.files && devResult.files.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="font-medium flex items-center gap-2">📁 Arquivos Gerados ({devResult.files.length})</h4>
-                      <div className="grid gap-2">
-                        {devResult.files.map((file: any, idx: number) => (
-                          <div key={idx} className="flex items-center gap-3 p-3 bg-white rounded-lg border" data-testid={`text-file-${idx}`}>
-                            <FileCode className="w-5 h-5 text-blue-500" />
-                            <div className="flex-1">
-                              <p className="font-mono text-sm">{file.path}</p>
-                            </div>
-                            <Badge variant="outline" className="text-xs">{file.type}</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {devResult.validation && (
-                    <div className="space-y-2">
-                      <h4 className="font-medium flex items-center gap-2">🔍 Validação</h4>
-                      <div className="p-3 bg-white rounded-lg border">
-                        <div className="flex items-center gap-2 mb-2">
-                          {devResult.validation.passed ? (
-                            <Badge className="bg-green-500">Aprovado</Badge>
-                          ) : (
-                            <Badge variant="destructive">Reprovado</Badge>
-                          )}
-                          <span className="text-sm">Score: {devResult.validation.score || "N/A"}</span>
-                        </div>
-                        {devResult.validation.issues && devResult.validation.issues.length > 0 && (
-                          <div className="space-y-1">
-                            {devResult.validation.issues.map((issue: string, idx: number) => (
-                              <p key={idx} className="text-sm text-orange-600">⚠️ {issue}</p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {devResult.commitUrl && (
-                    <div className="p-4 bg-white rounded-lg border flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <GitCommit className="w-5 h-5 text-green-600" />
-                        <div>
-                          <p className="font-medium">Commit realizado com sucesso!</p>
-                          <p className="text-xs text-muted-foreground">Código salvo no GitHub</p>
-                        </div>
-                      </div>
-                      <Button variant="outline" asChild data-testid="link-commit">
-                        <a href={devResult.commitUrl} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="w-4 h-4 mr-2" /> Ver no GitHub
-                        </a>
-                      </Button>
-                    </div>
-                  )}
-
-                  {devResult.log && devResult.log.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="font-medium flex items-center gap-2">📝 Log de Execução</h4>
-                      <ScrollArea className="h-40">
-                        <div className="p-3 bg-gray-900 rounded-lg text-xs font-mono space-y-1">
-                          {devResult.log.map((line: string, idx: number) => (
-                            <p key={idx} className="text-gray-300" data-testid={`log-line-${idx}`}>
-                              <span className="text-gray-500">[{idx + 1}]</span> {line}
-                            </p>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  )}
-
-                  {devResult.error && (
-                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <XCircle className="w-5 h-5 text-red-500" />
-                        <h4 className="font-medium text-red-700">Erro Encontrado</h4>
-                      </div>
-                      <p className="text-sm text-red-600" data-testid="text-dev-error">{devResult.error}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+            {showTerminal && <AgentTerminal />}
           </TabsContent>
 
           <TabsContent value="status" className="space-y-4">

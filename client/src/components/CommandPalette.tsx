@@ -121,10 +121,10 @@ export function CommandPalette() {
     },
     {
       id: "nav-crm",
-      name: "Abrir Arcádia CRM",
+      name: "Abrir Manager Partners",
       icon: <Handshake className="h-4 w-4" />,
       action: () => navigateTo("/crm"),
-      keywords: ["crm", "parceiros", "contratos", "vendas", "whatsapp"],
+      keywords: ["crm", "parceiros", "contratos", "manager", "partners"],
       group: "Navegação",
     },
     {

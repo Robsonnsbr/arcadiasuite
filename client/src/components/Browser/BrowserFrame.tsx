@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import React, { useEffect } from "react";
-import { Bot, Settings, MessageCircle, Zap, LayoutDashboard, Compass, Users, Ticket, LogOut, User, Shield, Receipt, Package, Rocket, Beaker, TrendingUp, MapPin, Droplets, Star, Database, Layout, Code, Code2, Store, Layers } from "lucide-react";
+import { Bot, Settings, MessageCircle, Zap, LayoutDashboard, Compass, Users, Ticket, LogOut, User, Shield, Receipt, Package, Rocket, Beaker, TrendingUp, MapPin, Droplets, Star, Database, Layout, Code, Code2, Store, Layers, Building2 } from "lucide-react";
 import browserIcon from "@assets/arcadia_branding/arcadia_suite_icon.png";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigationTracking } from "@/hooks/use-navigation-tracking";
@@ -123,13 +123,13 @@ function CompactNavigationBar() {
         </div>
         <div 
           className="flex items-center gap-1 hover:bg-muted px-2 py-1.5 rounded cursor-pointer transition-colors flex-shrink-0"
-          onClick={() => navigateTo("/erp", "ERP")}
-          data-testid="bookmark-erp"
+          onClick={() => navigateTo("/soe", "SOE")}
+          data-testid="bookmark-soe"
         >
           <div className="w-4 h-4 bg-gradient-to-br from-blue-600 to-blue-800 rounded-sm flex items-center justify-center">
-            <Package className="w-2.5 h-2.5 text-white" />
+            <Building2 className="w-2.5 h-2.5 text-white" />
           </div>
-          <span className="hidden md:inline">ERP</span>
+          <span className="hidden md:inline">SOE</span>
         </div>
         <div 
           className="flex items-center gap-1 hover:bg-muted px-2 py-1.5 rounded cursor-pointer transition-colors flex-shrink-0"

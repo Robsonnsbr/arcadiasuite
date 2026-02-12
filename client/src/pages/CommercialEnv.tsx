@@ -306,7 +306,7 @@ export default function CommercialEnv() {
               Comercial - Engenharia Ambiental
             </h1>
             <p className="text-muted-foreground">
-              Propostas, clientes e pipeline de vendas integrado ao Arcádia ERP
+              Propostas, clientes e pipeline de vendas integrado ao Arcádia SOE
             </p>
           </div>
           <Button onClick={() => refetchCustomers()} variant="outline" size="sm">
@@ -660,7 +660,7 @@ export default function CommercialEnv() {
                       {salesOrders.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                            Nenhum pedido encontrado. Sincronize com o Arcádia ERP.
+                            Nenhum pedido encontrado. Sincronize com o Arcádia SOE.
                           </TableCell>
                         </TableRow>
                       )}

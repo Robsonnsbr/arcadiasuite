@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
-import { ErpProfileProvider } from "@/contexts/ErpProfileContext";
+import { SoeMotorProvider } from "@/contexts/SoeMotorContext";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { CommandPalette } from "@/components/CommandPalette";
 import { KnowledgeCollectorInit } from "@/components/KnowledgeCollectorInit";
@@ -34,7 +34,7 @@ import Cockpit from "@/pages/Cockpit";
 import Fisco from "@/pages/Fisco";
 import People from "@/pages/People";
 import Contabil from "@/pages/Contabil";
-import ERP from "@/pages/ERP";
+import SOE from "@/pages/SOE";
 import Financeiro from "@/pages/Financeiro";
 import Communities from "@/pages/Communities";
 import ArcadiaNext from "@/pages/ArcadiaNext";
@@ -93,7 +93,8 @@ function Router() {
       <ProtectedRoute path="/fisco" component={Fisco} />
       <ProtectedRoute path="/people" component={People} />
       <ProtectedRoute path="/contabil" component={Contabil} />
-      <ProtectedRoute path="/erp" component={ERP} />
+      <ProtectedRoute path="/soe" component={SOE} />
+      <ProtectedRoute path="/erp" component={SOE} />
       <ProtectedRoute path="/financeiro" component={Financeiro} />
       <ProtectedRoute path="/communities" component={Communities} />
       <ProtectedRoute path="/quality" component={QualityModule} />
@@ -136,14 +137,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ErpProfileProvider>
+        <SoeMotorProvider>
           <TooltipProvider>
             <KnowledgeCollectorInit />
             <Toaster />
             <CommandPalette />
             <Router />
           </TooltipProvider>
-        </ErpProfileProvider>
+        </SoeMotorProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
