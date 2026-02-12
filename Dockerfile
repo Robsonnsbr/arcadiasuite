@@ -4,11 +4,11 @@ FROM node:20-slim
 # 2. Diretório de trabalho
 WORKDIR /app
 
-# 3. Instalar Python e Java
+# 3. Instalar Python, Java e dependências de build
 RUN apt-get update && apt-get install -y \
     python3.11 python3.11-venv python3-pip \
     openjdk-17-jdk \
-    git build-essential \
+    git build-essential curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 4. Copiar package.json e instalar dependências Node
@@ -18,6 +18,7 @@ RUN npm install
 # 5. Copiar requirements Python e instalar
 COPY python-service/requirements.txt ./python-requirements.txt
 RUN python3.11 -m venv .venv \
+    && .venv/bin/pip install --upgrade pip \
     && .venv/bin/pip install -r python-requirements.txt
 
 # 6. Copiar todo código
