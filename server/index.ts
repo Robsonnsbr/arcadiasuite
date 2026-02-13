@@ -23,7 +23,7 @@ const MAX_LOG_LINES = 200;
 function startPythonService(name: string, scriptPath: string, port: number) {
   const existing = managedServices.get(name);
 
-  const pythonProcess = spawn("python", [scriptPath], {
+  const pythonProcess = spawn("python3", [scriptPath], {
     env: { ...process.env, [`${name.toUpperCase()}_PORT`]: String(port) },
     stdio: ["pipe", "pipe", "pipe"],
     cwd: process.cwd(),
