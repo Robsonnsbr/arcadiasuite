@@ -2,7 +2,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git python3 py3-pip
 
 COPY package.json package-lock.json* ./
 RUN npm install --include=dev
