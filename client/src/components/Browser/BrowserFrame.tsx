@@ -1,7 +1,7 @@
 import { useLocation } from "wouter";
 import React, { useEffect } from "react";
 import { Bot, Settings, MessageCircle, Zap, LayoutDashboard, Compass, Users, Ticket, LogOut, User, Shield, Receipt, Package, Rocket, Beaker, TrendingUp, MapPin, Droplets, Star, Database, Layout, Code, Code2, Store, Layers, Building2 } from "lucide-react";
-import browserIcon from "@assets/arcadia_branding/arcadia_suite_icon.png";
+// import browserIcon from "@assets/arcadia_branding/arcadia_suite_icon.png";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigationTracking } from "@/hooks/use-navigation-tracking";
 import { Button } from "@/components/ui/button";

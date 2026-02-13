@@ -7,7 +7,7 @@ import {
   Calculator, Receipt, UserCog, Building2, Package, Wallet,
   Hash, ChevronDown, Circle, MessageSquare
 } from "lucide-react";
-import browserIcon from "@assets/arcadia_branding/arcadia_suite_icon.png";
+// import browserIcon from "@assets/arcadia_branding/arcadia_suite_icon.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
