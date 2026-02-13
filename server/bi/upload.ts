@@ -8,9 +8,8 @@ import * as BSON from "bson";
 import { db } from "../../db/index";
 import { biDatasets, stagedTables } from "@shared/schema";
 import { sql } from "drizzle-orm";
-import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
+const __dirname = process.cwd();
 const require = createRequire(__filename);
 const XLSX = require("xlsx");
 
