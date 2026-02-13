@@ -1,38 +1,21 @@
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Dependências de build
-RUN apk add --no-cache git python3 py3-pip bash
+RUN apk add --no-cache \
+ python3 \
+ py3-pip \
+ bash \
+ openjdk17-jre
+
+RUN pip3 install fastapi uvicorn
 
 COPY package.json package-lock.json* ./
 RUN npm install
-RUN pip3 install -r /app/server/python/requirements.txt
-
 
 COPY . .
+
 RUN npm run build
-
-# Remove dev deps
-RUN npm prune --omit=dev
-
-
-FROM node:20-alpine AS runner
-
-WORKDIR /app
-
-# Runtime deps (AQUI estava o erro)
-RUN apk add --no-cache python3 bash openjdk17-jre
-RUN pip3 install -r /app/server/python/requirements.txt
-
-
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/migrations ./migrations
-COPY --from=builder /app/shared ./shared
-COPY --from=builder /app/server ./server
-COPY --from=builder /app/metabase ./metabase
 
 ENV NODE_ENV=production
 ENV PORT=5000
