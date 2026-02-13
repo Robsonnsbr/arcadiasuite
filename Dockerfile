@@ -7,6 +7,8 @@ RUN apk add --no-cache git python3 py3-pip bash
 
 COPY package.json package-lock.json* ./
 RUN npm install
+RUN pip3 install -r /app/server/python/requirements.txt
+
 
 COPY . .
 RUN npm run build
@@ -20,7 +22,9 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 # Runtime deps (AQUI estava o erro)
-RUN apk add --no-cache python3 bash
+RUN apk add --no-cache python3 bash openjdk17-jre
+RUN pip3 install -r /app/server/python/requirements.txt
+
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules

@@ -4,7 +4,8 @@ export MB_JETTY_PORT=8088
 export MB_JETTY_HOST=0.0.0.0
 
 export MB_DB_TYPE=h2
-export MB_DB_FILE=/home/runner/workspace/metabase/metabase-data
+export MB_DB_FILE=/app/metabase
+
 
 export MB_EMOJI_IN_LOGS=false
 export MB_COLORIZE_LOGS=false
