@@ -1,16 +1,11 @@
 # =========================
-# Base Node 20 Debian slim
+# STAGE 1 — BUILDER
 # =========================
-FROM node:20-slim
+FROM node:20-slim AS builder
 
-# =========================
-# Diretório de trabalho
-# =========================
 WORKDIR /app
 
-# =========================
-# Instalar Python 3.11, Java 17 e dependências de build
-# =========================
+# Instalar dependências de build
 RUN apt-get update && apt-get install -y \
     python3.11 \
     python3.11-venv \
@@ -27,9 +22,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# =========================
-# Criar virtualenv e instalar dependências Python
-# =========================
+# Criar virtualenv Python
 RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
     && /opt/venv/bin/pip install --no-cache-dir \
@@ -51,39 +44,57 @@ RUN python3 -m venv /opt/venv \
         pymongo \
         pyopenssl
 
-# =========================
-# Definir venv como default
-# =========================
 ENV PATH="/opt/venv/bin:$PATH"
 
-# =========================
-# Copiar e instalar dependências Node
-# =========================
+# Instalar dependências Node (inclui dev)
 COPY package.json package-lock.json* ./
-RUN npm install --production
+RUN npm install --include=dev
 
-# =========================
-# Copiar código do projeto
-# =========================
+# Copiar projeto
 COPY . .
 
-# =========================
-# Build do projeto Node
-# =========================
+# Build
 RUN npm run build
 
+
+
 # =========================
-# Variáveis de ambiente
+# STAGE 2 — RUNNER (produção)
 # =========================
+FROM node:20-slim
+
+WORKDIR /app
+
+# Instalar apenas runtime necessário
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-venv \
+    python3-pip \
+    openjdk-17-jre-headless \
+    libpq-dev \
+    libffi-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# Copiar venv pronto do builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copiar apenas o necessário
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/package-lock.json* ./
+
+# Instalar apenas produção
+RUN npm install --omit=dev
+
+# Variáveis
 ENV NODE_ENV=production
 ENV PORT=5000
 
-# =========================
-# Porta exposta
-# =========================
 EXPOSE 5000
 
-# =========================
-# Comando de inicialização
-# =========================
 CMD ["node", "dist/index.cjs"]

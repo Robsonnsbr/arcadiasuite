@@ -76,7 +76,9 @@ export function setupAuth(app: Express) {
         const user = await ensureDevUser();
         const enrichedUser = await storage.getEnrichedUser(user);
         req.user = enrichedUser;
-        req.isAuthenticated = () => true;
+        req.isAuthenticated = function (): this is any {
+          return true;
+        };
         next();
       } catch (error) {
         next(error);
