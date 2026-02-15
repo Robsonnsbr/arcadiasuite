@@ -37,7 +37,7 @@ export default function AuthPage() {
       <div className="flex-1 flex items-center justify-center p-8 bg-white">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 mb-8">
-            <img src={browserIcon} alt="Arcadia" className="w-10 h-10" />
+            {/* <img src={browserIcon} alt="Arcadia" className="w-10 h-10" /> */}
             <h1 className="text-2xl font-semibold text-slate-900">Arcádia Suite</h1>
           </div>
 

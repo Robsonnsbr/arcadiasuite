@@ -428,7 +428,7 @@ export default function Home() {
         <aside className="w-64 border-r bg-white flex flex-col shrink-0 hidden md:flex">
           <div className="p-4 border-b">
             <div className="flex items-center gap-2">
-              <img src={browserIcon} alt="Arcadia Logo" className="w-8 h-8" />
+              {/* <img src={browserIcon} alt="Arcadia Logo" className="w-8 h-8" /> */}
               <span className="font-semibold text-slate-800">Arcádia Suite</span>
             </div>
           </div>
@@ -649,7 +649,7 @@ export default function Home() {
           <div className="max-w-5xl mx-auto space-y-6">
             <div className="flex flex-col items-center py-6 md:py-8">
               <div className="flex items-center gap-3 mb-4">
-                <img src={browserIcon} alt="Arcadia Logo" className="w-12 h-12 md:hidden" />
+                {/* <img src={browserIcon} alt="Arcadia Logo" className="w-12 h-12 md:hidden" /> */}
                 <h1 className="text-2xl md:text-3xl font-light text-slate-800" data-testid="text-welcome">
                   Olá, {user?.username || "Usuário"}
                 </h1>

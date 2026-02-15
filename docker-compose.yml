@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    container_name: arcadia-app
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://arcadia_user:senha@db:5432/arcadia_suite
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: arcadia_user
+      PGPASSWORD: senha
+      PGDATABASE: arcadia_suite
+      SESSION_SECRET: teste-local-secret
+      PLUS_AUTO_START: "false"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15
+    container_name: arcadia-db
+    environment:
+      POSTGRES_USER: arcadia_user
+      POSTGRES_PASSWORD: senha
+      POSTGRES_DB: arcadia_suite
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

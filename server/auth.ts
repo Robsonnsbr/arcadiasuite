@@ -16,6 +16,11 @@ declare global {
 }
 
 const scryptAsync = promisify(scrypt);
+const AUTH_DISABLED = process.env.DISABLE_AUTH === "true";
+const DEV_USERNAME = process.env.DEV_AUTH_USERNAME || "devadmin";
+const DEV_PASSWORD = process.env.DEV_AUTH_PASSWORD || "devadmin";
+
+let devUserPromise: Promise<SelectUser> | null = null;
 
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -44,8 +49,59 @@ const sessionSettings: session.SessionOptions = {
 
 export const sessionMiddleware = session(sessionSettings);
 
+async function ensureDevUser(): Promise<SelectUser> {
+  if (devUserPromise) return devUserPromise;
+
+  devUserPromise = (async () => {
+    const existing = await storage.getUserByUsername(DEV_USERNAME);
+    if (existing) return existing;
+
+    return await storage.createUser({
+      username: DEV_USERNAME,
+      password: await hashPassword(DEV_PASSWORD),
+      name: "Local Dev Admin",
+      role: "admin",
+    });
+  })();
+
+  return devUserPromise;
+}
+
 export function setupAuth(app: Express) {
   app.set("trust proxy", 1);
+
+  if (AUTH_DISABLED) {
+    app.use(async (req, _res, next) => {
+      try {
+        const user = await ensureDevUser();
+        const enrichedUser = await storage.getEnrichedUser(user);
+        req.user = enrichedUser;
+        req.isAuthenticated = () => true;
+        next();
+      } catch (error) {
+        next(error);
+      }
+    });
+
+    app.post("/api/login", async (_req, res) => {
+      const user = await ensureDevUser();
+      const enrichedUser = await storage.getEnrichedUser(user);
+      res.status(200).json(enrichedUser);
+    });
+
+    app.post("/api/logout", (_req, res) => {
+      res.sendStatus(200);
+    });
+
+    app.get("/api/user", async (_req, res) => {
+      const user = await ensureDevUser();
+      const enrichedUser = await storage.getEnrichedUser(user);
+      res.json(enrichedUser);
+    });
+
+    return;
+  }
+
   app.use(sessionMiddleware);
   app.use(passport.initialize());
   app.use(passport.session());

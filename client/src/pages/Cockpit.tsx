@@ -707,7 +707,7 @@ export default function Cockpit() {
           <div className="p-3 border-b">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <img src={browserIcon} alt="Arcádia" className="w-6 h-6 rounded" />
+                {/* <img src={browserIcon} alt="Arcádia" className="w-6 h-6 rounded" /> */}
                 <span className="font-semibold text-sm">Arcádia Suite</span>
               </div>
               <DigitalClock />

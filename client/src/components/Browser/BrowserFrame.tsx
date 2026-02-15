@@ -48,7 +48,7 @@ function CompactNavigationBar() {
           onClick={() => navigateTo("/", "Início")}
           data-testid="bookmark-home"
         >
-          <img src={browserIcon} className="w-4 h-4 rounded-sm object-cover" alt="" />
+          {/* <img src={browserIcon} className="w-4 h-4 rounded-sm object-cover" alt="" /> */}
           <span className="hidden md:inline">Início</span>
         </div>
         <div 
