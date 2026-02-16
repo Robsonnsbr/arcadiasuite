@@ -458,6 +458,12 @@ export default function ArcadiaRetail() {
     loadSellers();
   }, []);
 
+  useEffect(() => {
+    if (selectedEmpresaId) {
+      loadSellers();
+    }
+  }, [selectedEmpresaId]);
+
   const loadActivities = async () => {
     try {
       const res = await fetch("/api/retail/activity-feed?limit=20", { credentials: "include" });
@@ -1738,7 +1744,7 @@ export default function ArcadiaRetail() {
 
   const loadEmpresas = async () => {
     try {
-      const res = await fetch("/api/soe/empresas", { credentials: "include" });
+      const res = await fetch("/api/soe/empresas?tenantId=1", { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         setEmpresas(data);
@@ -1755,10 +1761,22 @@ export default function ArcadiaRetail() {
 
   const loadSellers = async () => {
     try {
-      const res = await fetch("/api/retail/sellers", { credentials: "include" });
+      const sellerUrl = selectedEmpresaId
+        ? `/api/retail/sellers?empresaId=${selectedEmpresaId}`
+        : "/api/retail/sellers";
+      const res = await fetch(sellerUrl, { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
-        setSellers(data.filter((s: any) => s.isActive !== false));
+        const activeSellers = data.filter((s: any) => s.isActive !== false);
+        setSellers(activeSellers);
+        if (activeSellers.length > 0) {
+          const hasSelectedSeller = selectedSellerId && activeSellers.some((s: any) => s.id === selectedSellerId);
+          if (!hasSelectedSeller) {
+            const firstSellerId = activeSellers[0].id;
+            setSelectedSellerId(firstSellerId);
+            localStorage.setItem("retail_seller_id", String(firstSellerId));
+          }
+        }
       }
     } catch (error) {
       console.error("Error loading sellers:", error);

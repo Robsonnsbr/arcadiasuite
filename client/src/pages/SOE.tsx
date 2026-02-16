@@ -743,7 +743,7 @@ export default function SOE() {
   const { data: salesOrders = [] } = useQuery<SalesOrder[]>({
     queryKey: ["/api/soe/sales-orders", tenantId],
     queryFn: () => api.get(`/api/soe/sales-orders?tenantId=${tenantId}`),
-    enabled: !useERPNext,
+    enabled: !useERPNext && !usePlus,
   });
 
   const { data: purchaseOrders = [] } = useQuery<PurchaseOrder[]>({
@@ -758,11 +758,45 @@ export default function SOE() {
     enabled: !useERPNext,
   });
 
-  const displayCustomers = useERPNext ? erpnextCustomers.length : (stats.customers || customers.length);
-  const displaySuppliers = useERPNext ? erpnextSuppliers.length : (stats.suppliers || suppliers.length);
-  const displayProducts = useERPNext ? erpnextItems.length : (stats.products || products.length);
-  const displaySalesOrders = useERPNext ? erpnextSalesOrders.length : (stats.salesOrders || salesOrders.length);
-  const displayPurchaseOrders = useERPNext ? 0 : (stats.purchaseOrders || purchaseOrders.length);
+  const plusSalesOrdersMapped: SalesOrder[] = usePlus
+    ? (plusVendas || []).map((v: any) => ({
+        id: v.id,
+        orderNumber: `VND-${v.id}`,
+        customerId: v.cliente_id || 0,
+        customerName: v.cliente_nome || undefined,
+        orderDate: v.created_at || new Date().toISOString(),
+        deliveryDate: v.created_at || new Date().toISOString(),
+        status: v.status || "confirmed",
+        subtotal: String(v.valor_total || 0),
+        discount: String(v.desconto || 0),
+        tax: "0",
+        total: String(v.valor_total || 0),
+      }))
+    : [];
+
+  const activeSalesOrders: SalesOrder[] = usePlus ? plusSalesOrdersMapped : salesOrders;
+
+  const displayCustomers = useERPNext
+    ? erpnextCustomers.length
+    : usePlus
+      ? customers.length
+      : (stats.customers || customers.length);
+  const displaySuppliers = useERPNext
+    ? erpnextSuppliers.length
+    : usePlus
+      ? suppliers.length
+      : (stats.suppliers || suppliers.length);
+  const displayProducts = useERPNext
+    ? erpnextItems.length
+    : usePlus
+      ? products.length
+      : (stats.products || products.length);
+  const displaySalesOrders = useERPNext
+    ? erpnextSalesOrders.length
+    : usePlus
+      ? activeSalesOrders.length
+      : (stats.salesOrders || salesOrders.length);
+  const displayPurchaseOrders = useERPNext ? 0 : (usePlus ? 0 : (stats.purchaseOrders || purchaseOrders.length));
 
   const createCustomerMutation = useMutation({
     mutationFn: (data: any) => api.post("/api/soe/customers", { ...data, tenantId }),
@@ -1211,11 +1245,11 @@ export default function SOE() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {salesOrders.length === 0 ? (
+                      {activeSalesOrders.length === 0 ? (
                         <p className="text-sm text-muted-foreground">Nenhum pedido de venda registrado</p>
                       ) : (
                         <div className="space-y-2">
-                          {salesOrders.slice(0, 5).map((order) => (
+                          {activeSalesOrders.slice(0, 5).map((order) => (
                             <div key={order.id} className="flex items-center justify-between py-2 border-b last:border-0">
                               <div>
                                 <p className="font-medium">{order.orderNumber}</p>
@@ -1561,14 +1595,14 @@ export default function SOE() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {salesOrders.length === 0 ? (
+                        {activeSalesOrders.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                               Nenhum pedido de venda registrado
                             </TableCell>
                           </TableRow>
                         ) : (
-                          salesOrders.map((order) => (
+                          activeSalesOrders.map((order) => (
                             <TableRow key={order.id} data-testid={`row-sales-${order.id}`}>
                               <TableCell className="font-mono">{order.orderNumber}</TableCell>
                               <TableCell>{order.customerName || `Cliente #${order.customerId}`}</TableCell>

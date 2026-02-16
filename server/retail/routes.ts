@@ -19,6 +19,7 @@ import {
 } from "@shared/schema";
 import { eq, desc, and, ilike, sql, or, asc, inArray, gte, lte, isNull, between, count, sum } from "drizzle-orm";
 import { retailPlusSyncService } from "./plus-sync";
+import { plusClient } from "../plus/client";
 
 const router = Router();
 
@@ -212,6 +213,40 @@ router.delete("/payment-methods/:id", async (req: Request, res: Response) => {
 // ========== VENDEDORES ==========
 router.get("/sellers", async (req: Request, res: Response) => {
   try {
+    const user = (req as any).user;
+    const tenantId = Number(req.query.tenantId ?? user?.tenantId ?? 1);
+    const localEmpresaId = Number(req.query.empresaId ?? 0);
+
+    let plusEmpresaId: number | null = null;
+    if (localEmpresaId > 0) {
+      const [empresa] = await db.select().from(tenantEmpresas)
+        .where(and(eq(tenantEmpresas.id, localEmpresaId), eq(tenantEmpresas.tenantId, tenantId)))
+        .limit(1);
+      plusEmpresaId = empresa?.plusEmpresaId ?? null;
+    } else {
+      const [empresa] = await db.select().from(tenantEmpresas)
+        .where(and(eq(tenantEmpresas.tenantId, tenantId), eq(tenantEmpresas.status, "active")))
+        .orderBy(desc(tenantEmpresas.id))
+        .limit(1);
+      plusEmpresaId = empresa?.plusEmpresaId ?? null;
+    }
+
+    if (plusEmpresaId) {
+      const plusVendedores = await plusClient.listarVendedores(plusEmpresaId);
+      if (plusVendedores.success && Array.isArray(plusVendedores.data)) {
+        const sellersFromPlus = plusVendedores.data.map((v: any) => ({
+          id: Number(v.id),
+          name: String(v.nome || ""),
+          email: v.email || null,
+          phone: v.telefone || null,
+          isActive: v.status === undefined ? true : Number(v.status) === 1,
+          source: "plus",
+        })).filter((s: any) => s.id > 0 && s.name);
+
+        return res.json(sellersFromPlus);
+      }
+    }
+
     const sellers = await db.select().from(retailSellers).orderBy(asc(retailSellers.name));
     res.json(sellers);
   } catch (error) {
@@ -2175,7 +2210,20 @@ router.get("/sales", async (req: Request, res: Response) => {
     const conditions = [];
     if (sessionId) conditions.push(eq(posSales.sessionId, parseInt(sessionId as string)));
     if (storeId) conditions.push(eq(posSales.storeId, parseInt(storeId as string)));
-    if (soldBy) conditions.push(eq(posSales.soldBy, soldBy as string));
+    if (soldBy) {
+      const soldByRaw = String(soldBy);
+      const soldById = parseInt(soldByRaw, 10);
+      if (Number.isInteger(soldById) && soldById > 0) {
+        const [seller] = await db.select().from(retailSellers).where(eq(retailSellers.id, soldById)).limit(1);
+        if (seller) {
+          conditions.push(or(eq(posSales.soldBy, soldByRaw), eq(posSales.soldBy, seller.name)));
+        } else {
+          conditions.push(eq(posSales.soldBy, soldByRaw));
+        }
+      } else {
+        conditions.push(eq(posSales.soldBy, soldByRaw));
+      }
+    }
     if (dateFrom) conditions.push(gte(posSales.createdAt, new Date(dateFrom as string)));
     if (dateTo) {
       const endDate = new Date(dateTo as string);
@@ -2227,7 +2275,7 @@ router.post("/sales", async (req: Request, res: Response) => {
   try {
     console.log("[SALES] Recebendo requisição de venda:", JSON.stringify(req.body, null, 2));
     const saleNumber = `VD-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-    const { items, creditUsed, useCredits, personId, paymentMethods, subtotal, ...saleData } = req.body;
+    const { items, creditUsed, useCredits, personId, paymentMethods, subtotal, sellerId, ...saleData } = req.body;
     
     // Validação server-side: verificar totais
     const subtotalAmount = parseFloat(subtotal || "0");
@@ -2277,6 +2325,11 @@ router.post("/sales", async (req: Request, res: Response) => {
       }
     }
     
+    const parsedSellerId = parseInt(String(sellerId || ""), 10);
+    const soldBy = Number.isInteger(parsedSellerId) && parsedSellerId > 0
+      ? String(parsedSellerId)
+      : ((req as any).user?.id ? String((req as any).user?.id) : null);
+
     // Executar tudo em uma transação para garantir atomicidade
     const result = await db.transaction(async (tx) => {
       const [sale] = await tx.insert(posSales)
@@ -2284,7 +2337,7 @@ router.post("/sales", async (req: Request, res: Response) => {
           ...saleData, 
           subtotal: String(subtotalAmount),
           saleNumber, 
-          soldBy: (req as any).user?.id 
+          soldBy
         })
         .returning();
       
@@ -4336,7 +4389,9 @@ router.post("/commission-closures/calculate", async (req: Request, res: Response
       const [seller] = await db.select().from(retailSellers).where(eq(retailSellers.id, sellerId));
       if (seller) {
         sellerName = seller.name;
-        salesConditions.push(eq(posSales.soldBy, seller.name));
+        salesConditions.push(or(eq(posSales.soldBy, seller.name), eq(posSales.soldBy, String(seller.id))));
+      } else {
+        salesConditions.push(eq(posSales.soldBy, String(sellerId)));
       }
     }
     
@@ -4371,7 +4426,10 @@ router.post("/commission-closures/calculate", async (req: Request, res: Response
       if (ret.originalSaleId) {
         const [originalSale] = await db.select().from(posSales).where(eq(posSales.id, ret.originalSaleId));
         if (originalSale) {
-          if (!sellerName || originalSale.soldBy === sellerName) {
+          const sellerMatch = !sellerName || (
+            originalSale.soldBy === sellerName || originalSale.soldBy === String(sellerId)
+          );
+          if (sellerMatch) {
             totalReturns += parseFloat(ret.refundAmount || "0");
             returnsCount++;
           }
@@ -4468,7 +4526,7 @@ router.get("/commission-dashboard", async (req: Request, res: Response) => {
     
     // Agrupar por vendedor
     const sellerStats = await Promise.all(sellers.map(async (seller) => {
-      const sellerSales = sales.filter(s => s.soldBy === seller.name);
+      const sellerSales = sales.filter(s => s.soldBy === seller.name || s.soldBy === String(seller.id));
       const totalSales = sellerSales.reduce((sum, s) => sum + parseFloat(s.totalAmount || "0"), 0);
       
       // Calcular devoluções do vendedor
@@ -4476,7 +4534,7 @@ router.get("/commission-dashboard", async (req: Request, res: Response) => {
       for (const ret of returns) {
         if (ret.originalSaleId) {
           const [originalSale] = await db.select().from(posSales).where(eq(posSales.id, ret.originalSaleId));
-          if (originalSale && originalSale.soldBy === seller.name) {
+          if (originalSale && (originalSale.soldBy === seller.name || originalSale.soldBy === String(seller.id))) {
             totalReturns += parseFloat(ret.refundAmount || "0");
           }
         }
@@ -5215,4 +5273,3 @@ router.post("/plus/empresas/:id/bind", async (req: Request, res: Response) => {
 });
 
 export default router;
-

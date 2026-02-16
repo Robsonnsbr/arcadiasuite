@@ -25,17 +25,26 @@ export class RetailPlusSyncService {
     connected: boolean;
     empresas: number;
     version?: string;
+    error?: string;
+    empresasError?: string;
   }> {
     const health = await plusClient.healthCheck();
     let empresasCount = 0;
+    let empresasError: string | undefined;
     if (health.success) {
       const empresas = await plusClient.listarEmpresas();
-      empresasCount = Array.isArray(empresas.data) ? empresas.data.length : 0;
+      if (empresas.success) {
+        empresasCount = Array.isArray(empresas.data) ? empresas.data.length : 0;
+      } else {
+        empresasError = empresas.error || "Falha ao consultar empresas";
+      }
     }
     return {
       connected: health.success,
       empresas: empresasCount,
       version: health.data?.version,
+      error: health.success ? undefined : health.error,
+      empresasError,
     };
   }
 

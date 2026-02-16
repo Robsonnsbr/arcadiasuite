@@ -1,5 +1,5 @@
 const PLUS_PORT = process.env.PLUS_PORT || 8080;
-const PLUS_BASE_URL = `http://localhost:${PLUS_PORT}`;
+const PLUS_BASE_URL = process.env.PLUS_BASE_URL || `http://localhost:${PLUS_PORT}`;
 
 export interface PlusApiResponse<T = any> {
   success: boolean;
@@ -136,6 +136,15 @@ export interface PlusNFeData {
   }>;
 }
 
+export interface PlusVendedor {
+  id: number;
+  nome: string;
+  cpf_cnpj?: string;
+  status?: number;
+  email?: string;
+  telefone?: string;
+}
+
 export const plusClient = {
   async getDashboardData(empresaId?: number): Promise<PlusApiResponse> {
     return plusFetch("/api/graficos/dados-cards", {}, empresaId);
@@ -215,7 +224,14 @@ export const plusClient = {
   // ========================================
 
   async listarProdutos(empresaId?: number, page = 1): Promise<PlusApiResponse<PlusProduto[]>> {
-    return plusFetch(`/api/produtos?page=${page}`, {}, empresaId);
+    return plusFetch(`/api/suite/produtos?page=${page}`, {}, empresaId);
+  },
+
+  async listarVendedores(empresaId: number): Promise<PlusApiResponse<PlusVendedor[]>> {
+    return plusFetch("/api/pdv/vendedores", {
+      method: "POST",
+      body: JSON.stringify({ empresa_id: empresaId }),
+    });
   },
 
   async criarProduto(data: PlusProduto, empresaId?: number): Promise<PlusApiResponse<PlusProduto>> {
@@ -320,14 +336,14 @@ export const plusClient = {
   // ========================================
 
   async emitirNFe(dados: PlusNFeData, empresaId?: number): Promise<PlusApiResponse> {
-    return plusFetch("/api/nfe/emitir", {
+    return plusFetch("/api/suite/nfe/emitir", {
       method: "POST",
       body: JSON.stringify(dados),
     }, empresaId);
   },
 
   async emitirNFCe(dados: PlusNFeData, empresaId?: number): Promise<PlusApiResponse> {
-    return plusFetch("/api/nfce/emitir", {
+    return plusFetch("/api/suite/nfce/emitir", {
       method: "POST",
       body: JSON.stringify(dados),
     }, empresaId);
@@ -349,7 +365,7 @@ export const plusClient = {
   // ========================================
 
   async listarEmpresas(): Promise<PlusApiResponse> {
-    return plusFetch("/api/empresas");
+    return plusFetch("/api/suite/empresas");
   },
 
   async buscarEmpresa(id: number): Promise<PlusApiResponse> {

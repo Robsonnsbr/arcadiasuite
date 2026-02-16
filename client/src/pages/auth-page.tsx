@@ -173,7 +173,7 @@ export default function AuthPage() {
       <div className="hidden lg:flex flex-1 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 items-center justify-center p-12">
         <div className="max-w-md text-center">
           <img 
-            src={browserIcon} 
+            // src={browserIcon} 
             alt="Arcádia Suite" 
             className="w-32 h-32 mx-auto mb-8 drop-shadow-2xl"
           />

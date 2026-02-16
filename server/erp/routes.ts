@@ -4,6 +4,7 @@ import { db } from "../../db/index";
 import { customers, suppliers, products, salesOrders, purchaseOrders, erpSegments, erpConfig, insertErpSegmentSchema, insertErpConfigSchema, persons, personRoles, mobileDevices, posSales, posSaleItems, finAccountsReceivable, tenants, tenantEmpresas, type TenantFeatures } from "@shared/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { z } from "zod";
+import { plusClient } from "../plus/client";
 
 export function registerSoeRoutes(app: Express): void {
   app.use((req, res, next) => {
@@ -17,6 +18,107 @@ export function registerSoeRoutes(app: Express): void {
 }
 
 export function registerErpRoutes(app: Express): void {
+  const normalizeCnpj = (value: string | null | undefined): string =>
+    String(value || "").replace(/\D+/g, "");
+
+  const resolveTenantId = async (requestedTenantId: number): Promise<number> => {
+    const tenantId = Number.isInteger(requestedTenantId) && requestedTenantId > 0
+      ? requestedTenantId
+      : 1;
+
+    const [exactTenant] = await db.select().from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    if (exactTenant) return exactTenant.id;
+
+    const [firstTenant] = await db.select().from(tenants)
+      .orderBy(desc(tenants.id))
+      .limit(1);
+    if (firstTenant) return firstTenant.id;
+
+    const [created] = await db.insert(tenants).values({
+      id: tenantId,
+      name: `Tenant ${tenantId}`,
+      slug: `tenant-${tenantId}`,
+      status: "active",
+      tenantType: "client",
+      plan: "free",
+    }).returning();
+
+    return created.id;
+  };
+
+  const syncTenantEmpresasFromPlus = async (tenantId: number): Promise<void> => {
+    try {
+      const plusEmpresas = await plusClient.listarEmpresas();
+      if (!plusEmpresas.success || !Array.isArray(plusEmpresas.data)) {
+        return;
+      }
+
+      for (const plusEmpresa of plusEmpresas.data as any[]) {
+        const plusEmpresaId = Number(plusEmpresa?.id);
+        if (!Number.isFinite(plusEmpresaId) || plusEmpresaId <= 0) continue;
+
+        const cnpj = normalizeCnpj(plusEmpresa?.cpf_cnpj);
+        const razaoSocial = String(plusEmpresa?.nome || plusEmpresa?.nome_fantasia || `Empresa ${plusEmpresaId}`);
+        const nomeFantasia = plusEmpresa?.nome_fantasia ? String(plusEmpresa.nome_fantasia) : null;
+        const status = plusEmpresa?.status === false || plusEmpresa?.status === 0 || plusEmpresa?.status === "0"
+          ? "inactive"
+          : "active";
+
+        const [existingByPlusId] = await db.select().from(tenantEmpresas)
+          .where(and(
+            eq(tenantEmpresas.tenantId, tenantId),
+            eq(tenantEmpresas.plusEmpresaId, plusEmpresaId)
+          ))
+          .limit(1);
+
+        let existing = existingByPlusId;
+        if (!existing && cnpj) {
+          const [existingByCnpj] = await db.select().from(tenantEmpresas)
+            .where(and(
+              eq(tenantEmpresas.tenantId, tenantId),
+              eq(tenantEmpresas.cnpj, cnpj)
+            ))
+            .limit(1);
+          existing = existingByCnpj;
+        }
+
+        if (existing) {
+          await db.update(tenantEmpresas)
+            .set({
+              razaoSocial,
+              nomeFantasia,
+              cnpj: cnpj || existing.cnpj,
+              email: plusEmpresa?.email ? String(plusEmpresa.email) : existing.email,
+              phone: plusEmpresa?.celular ? String(plusEmpresa.celular) : existing.phone,
+              plusEmpresaId,
+              status,
+              updatedAt: new Date(),
+            })
+            .where(eq(tenantEmpresas.id, existing.id));
+          continue;
+        }
+
+        if (!cnpj) continue;
+
+        await db.insert(tenantEmpresas).values({
+          tenantId,
+          razaoSocial,
+          nomeFantasia,
+          cnpj,
+          email: plusEmpresa?.email ? String(plusEmpresa.email) : null,
+          phone: plusEmpresa?.celular ? String(plusEmpresa.celular) : null,
+          tipo: "filial",
+          status,
+          plusEmpresaId,
+        });
+      }
+    } catch (error) {
+      console.warn("[ERP] Falha ao sincronizar empresas com Plus:", error);
+    }
+  };
+
   app.get("/api/erp/connections", async (req: Request, res: Response) => {
     try {
       if (!req.isAuthenticated()) {
@@ -1242,8 +1344,15 @@ export function registerErpRoutes(app: Express): void {
 
   app.get("/api/erp/empresas", async (req: Request, res: Response) => {
     try {
-      const tenantId = (req as any).user?.tenantId;
-      if (!tenantId) return res.status(401).json({ error: "Tenant not identified" });
+      const requestedTenantId = Number(
+        req.query.tenantId ??
+        (req as any).user?.tenantId ??
+        1
+      );
+      const tenantId = await resolveTenantId(requestedTenantId);
+
+      await syncTenantEmpresasFromPlus(tenantId);
+
       const empresas = await db.select().from(tenantEmpresas)
         .where(and(eq(tenantEmpresas.tenantId, tenantId), eq(tenantEmpresas.status, "active")));
       res.json(empresas);
@@ -1255,8 +1364,12 @@ export function registerErpRoutes(app: Express): void {
 
   app.get("/api/erp/empresas/:id", async (req: Request, res: Response) => {
     try {
-      const tenantId = (req as any).user?.tenantId;
-      if (!tenantId) return res.status(401).json({ error: "Tenant not identified" });
+      const requestedTenantId = Number(
+        req.query.tenantId ??
+        (req as any).user?.tenantId ??
+        1
+      );
+      const tenantId = await resolveTenantId(requestedTenantId);
       const id = parseInt(req.params.id);
       const [empresa] = await db.select().from(tenantEmpresas)
         .where(and(eq(tenantEmpresas.id, id), eq(tenantEmpresas.tenantId, tenantId)));
@@ -1270,8 +1383,13 @@ export function registerErpRoutes(app: Express): void {
 
   app.post("/api/erp/empresas", async (req: Request, res: Response) => {
     try {
-      const tenantId = (req as any).user?.tenantId;
-      if (!tenantId) return res.status(401).json({ error: "Tenant not identified" });
+      const requestedTenantId = Number(
+        req.body?.tenantId ??
+        req.query.tenantId ??
+        (req as any).user?.tenantId ??
+        1
+      );
+      const tenantId = await resolveTenantId(requestedTenantId);
       const { razaoSocial, nomeFantasia, cnpj, ie, im, email, phone, tipo, cep, logradouro, numero, complemento, bairro, cidade, uf, codigoIbge, regimeTributario } = req.body;
       if (!razaoSocial || !cnpj) return res.status(400).json({ error: "razaoSocial and cnpj required" });
       const [empresa] = await db.insert(tenantEmpresas).values({
@@ -1303,8 +1421,13 @@ export function registerErpRoutes(app: Express): void {
 
   app.put("/api/erp/empresas/:id", async (req: Request, res: Response) => {
     try {
-      const tenantId = (req as any).user?.tenantId;
-      if (!tenantId) return res.status(401).json({ error: "Tenant not identified" });
+      const requestedTenantId = Number(
+        req.body?.tenantId ??
+        req.query.tenantId ??
+        (req as any).user?.tenantId ??
+        1
+      );
+      const tenantId = await resolveTenantId(requestedTenantId);
       const id = parseInt(req.params.id);
       const [existing] = await db.select().from(tenantEmpresas)
         .where(and(eq(tenantEmpresas.id, id), eq(tenantEmpresas.tenantId, tenantId)));

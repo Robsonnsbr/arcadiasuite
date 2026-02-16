@@ -16,9 +16,17 @@ declare global {
 }
 
 const scryptAsync = promisify(scrypt);
-const AUTH_DISABLED = process.env.DISABLE_AUTH === "true";
+const DEV_OPEN_ACCESS =
+  process.env.DEV_OPEN_ACCESS === "true" ||
+  process.env.DISABLE_AUTH === "true";
 const DEV_USERNAME = process.env.DEV_AUTH_USERNAME || "devadmin";
 const DEV_PASSWORD = process.env.DEV_AUTH_PASSWORD || "devadmin";
+const SESSION_COOKIE_SECURE =
+  process.env.SESSION_COOKIE_SECURE === "true"
+    ? true
+    : process.env.SESSION_COOKIE_SECURE === "false"
+      ? false
+      : process.env.NODE_ENV === "production";
 
 let devUserPromise: Promise<SelectUser> | null = null;
 
@@ -41,7 +49,7 @@ const sessionSettings: session.SessionOptions = {
   saveUninitialized: false,
   store: storage.sessionStore,
   cookie: {
-    secure: process.env.NODE_ENV === "production",
+    secure: SESSION_COOKIE_SECURE,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000,
   },
@@ -70,7 +78,14 @@ async function ensureDevUser(): Promise<SelectUser> {
 export function setupAuth(app: Express) {
   app.set("trust proxy", 1);
 
-  if (AUTH_DISABLED) {
+  const openAccessEnabled =
+    DEV_OPEN_ACCESS && process.env.NODE_ENV !== "production";
+
+  if (openAccessEnabled) {
+    console.warn(
+      "[Auth] DEV_OPEN_ACCESS habilitado: autenticacao desativada para todas as rotas (modo desenvolvimento).",
+    );
+
     app.use(async (req, _res, next) => {
       try {
         const user = await ensureDevUser();
@@ -102,6 +117,12 @@ export function setupAuth(app: Express) {
     });
 
     return;
+  }
+
+  if (DEV_OPEN_ACCESS && process.env.NODE_ENV === "production") {
+    console.warn(
+      "[Auth] DEV_OPEN_ACCESS ignorado em producao por seguranca.",
+    );
   }
 
   app.use(sessionMiddleware);
