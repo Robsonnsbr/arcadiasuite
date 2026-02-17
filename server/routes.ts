@@ -70,23 +70,26 @@ export async function registerRoutes(
   await setupPlusProxy(app);
   
   // Metabase BI - Proxy to Metabase instance
-  setupMetabaseProxy(app);
+  // setupMetabaseProxy(app);
   
   registerChatRoutes(app);
   registerSoeRoutes(app);
   registerInternalChatRoutes(app);
-  setupChatSocket(httpServer);
-  setupCommunitySocket(httpServer);
-  registerWhatsappRoutes(app);
-  registerManusRoutes(app);
-  registerCustomMcpRoutes(app);
-  registerAutomationRoutes(app);
-  registerAutomationEngineRoutes(app);
-  registerBiRoutes(app);
-  registerBiEngineRoutes(app);
+  // setupChatSocket(httpServer);
+  // setupCommunitySocket(httpServer);
+  // registerWhatsappRoutes(app);
+  // registerManusRoutes(app);
+  // registerCustomMcpRoutes(app);
+  // registerAutomationRoutes(app);
+  // registerAutomationEngineRoutes(app);
+
+  
   registerMetaSetRoutes(app);
-  registerCommEngineRoutes(app);
-  registerLearningRoutes(app);
+  //:TODO comentado para nao chamar o learning, corrigir/criar container para servico
+  // registerLearningRoutes(app);
+  // registerCommEngineRoutes(app);
+  // registerBiRoutes(app);
+  // registerBiEngineRoutes(app);
   app.use("/api/compass", compassRoutes);
   app.use("/api/productivity", productivityRoutes);
   app.use("/api/crm", crmRoutes);

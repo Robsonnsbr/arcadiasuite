@@ -5,7 +5,7 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Instalar dependências de build
+# Dependências de build
 RUN apt-get update && apt-get install -y \
     python3.11 \
     python3.11-venv \
@@ -22,50 +22,49 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Criar virtualenv Python
-RUN python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install --no-cache-dir \
-        fastapi \
-        uvicorn \
-        pandas \
-        numpy \
-        psycopg2-binary \
-        httpx \
-        pydantic \
-        lxml \
-        python-multipart \
-        python-docx \
-        cryptography \
-        signxml \
-        zeep \
-        beautifulsoup4 \
-        matplotlib \
-        pymongo \
-        pyopenssl
+# Python venv + libs (como antes)
+RUN python3.11 -m venv /opt/venv \
+ && /opt/venv/bin/pip install --upgrade pip \
+ && /opt/venv/bin/pip install --no-cache-dir \
+    fastapi \
+    uvicorn \
+    pandas \
+    numpy \
+    psycopg2-binary \
+    httpx \
+    pydantic \
+    lxml \
+    python-multipart \
+    python-docx \
+    cryptography \
+    signxml \
+    zeep \
+    beautifulsoup4 \
+    matplotlib \
+    pymongo \
+    pyopenssl
 
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Instalar dependências Node (inclui dev)
+# Node deps (com dev)
 COPY package.json package-lock.json* ./
 RUN npm install --include=dev
 
-# Copiar projeto
+# Projeto inteiro
 COPY . .
 
-# Build
+# Build TS
 RUN npm run build
 
 
-
 # =========================
-# STAGE 2 — RUNNER (produção)
+# STAGE 2 — RUNNER
 # =========================
 FROM node:20-slim
 
 WORKDIR /app
 
-# Instalar apenas runtime necessário
+# Runtime libs
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-venv \
@@ -75,23 +74,28 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     libfreetype6-dev \
     libpng-dev \
+    bash \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-
-# Copiar venv pronto do builder
+# Python venv pronto
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copiar apenas o necessário
+# Código JS compilado
 COPY --from=builder /app/dist ./dist
+
+# Engines e serviços
+COPY --from=builder /app/server ./server
+COPY --from=builder /app/metabase ./metabase
+
+# Node manifests
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/package-lock.json* ./
 
-# Instalar apenas produção
+# Apenas deps de produção
 RUN npm install --omit=dev
 
-# Variáveis
 ENV NODE_ENV=production
 ENV PORT=5000
 
