@@ -152,7 +152,11 @@ function startNodeService(name: string, scriptPath: string, port: number) {
     if (service.logs.length > MAX_LOG_LINES) service.logs.splice(0, service.logs.length - MAX_LOG_LINES);
   };
 
-  const nodeProcess = spawn("npx", ["tsx", scriptPath], {
+  const runInProduction = process.env.NODE_ENV === "production";
+  const command = runInProduction ? "node" : "npx";
+  const args = runInProduction ? [scriptPath] : ["tsx", scriptPath];
+
+  const nodeProcess = spawn(command, args, {
     env: { ...process.env, PORT: port.toString() },
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -203,7 +207,12 @@ export { managedServices, restartManagedService, stopManagedService, getManagedS
 startPythonService("contabil", path.join(process.cwd(), "server/python/contabil_service.py"), 8003);
 startPythonService("bi", path.join(process.cwd(), "server/python/bi_engine.py"), 8004);
 startPythonService("automation", path.join(process.cwd(), "server/python/automation_engine.py"), 8005);
-startNodeService("communication", path.join(process.cwd(), "server/communication/engine.ts"), 8006);
+const communicationScriptPath =
+  process.env.NODE_ENV === "production"
+    ? path.join(process.cwd(), "dist/communication-engine.cjs")
+    : path.join(process.cwd(), "server/communication/engine.ts");
+
+startNodeService("communication", communicationScriptPath, 8006);
 
 function startShellService(name: string, scriptPath: string, port: number) {
   const existing = managedServices.get(name);
@@ -270,7 +279,10 @@ function startShellService(name: string, scriptPath: string, port: number) {
   return shellProcess;
 }
 
-startShellService("metabase", path.join(process.cwd(), "metabase/start-metabase.sh"), 8088);
+const shouldStartMetabase = process.env.METABASE_AUTO_START === "true";
+if (shouldStartMetabase) {
+  startShellService("metabase", path.join(process.cwd(), "metabase/start-metabase.sh"), 8088);
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -291,6 +303,10 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+app.get("/api/health", (_req: Request, res: Response) => {
+  res.status(200).json({ status: "ok", service: "arcadiasuite" });
+});
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

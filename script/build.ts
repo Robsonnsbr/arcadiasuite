@@ -61,6 +61,20 @@ async function buildAll() {
     logLevel: "info",
   });
 
+  await esbuild({
+    entryPoints: ["server/communication/engine.ts"],
+    platform: "node",
+    bundle: true,
+    format: "cjs",
+    outfile: "dist/communication-engine.cjs",
+    define: {
+      "process.env.NODE_ENV": '"production"',
+    },
+    minify: true,
+    external: externals,
+    logLevel: "info",
+  });
+
   // connect-pg-simple bundled code expects this SQL file at runtime under dist/
   await copyFile(
     path.resolve("node_modules", "connect-pg-simple", "table.sql"),

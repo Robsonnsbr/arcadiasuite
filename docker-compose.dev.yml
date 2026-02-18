@@ -1,0 +1,17 @@
+services:
+  app:
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://arcadia_user:arcadia_pass@db:5432/arcadia_suite
+      SESSION_COOKIE_SECURE: "false"
+      DEV_OPEN_ACCESS: "true"
+      DISABLE_AUTH: "true"
+      METABASE_AUTO_START: "false"
+    ports:
+      - "5000:5000"
+
+  db:
+    ports:
+      - "5432:5432"
